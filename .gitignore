@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Capacitor native projects (generated)
+ios/
+android/
+
+# Debug
+*.log
+npm-debug.log*
+
+# Test
+coverage/
