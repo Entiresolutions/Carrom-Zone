@@ -532,7 +532,7 @@ class ChampionshipSegmentedToggle extends StatelessWidget {
           Expanded(
             child: _buildSegment(
               title: 'FREESTYLE POINTS',
-              subtitle: 'W:10 · B:20 · Q:50 · 160 Pts',
+              subtitle: 'W:20 • B:10 • Q:50 • 160 Pts',
               isSelected: !isClassic,
               onTap: onSelectFreestyle,
             ),
@@ -564,9 +564,9 @@ class ChampionshipSegmentedToggle extends StatelessWidget {
             color: isSelected ? null : Colors.transparent,
             border: Border.all(
               color: isSelected
-                  ? Colors.transparent
-                  : ChampionshipColors.greenOutline,
-              width: 1.0,
+                  ? ChampionshipColors.goldBorder
+                  : Colors.transparent,
+              width: 1.2,
             ),
             boxShadow: isSelected
                 ? const [
@@ -660,11 +660,15 @@ class ChampionshipModeCard extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 Container(
-                  width: 54,
-                  height: 54,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(16),
                     gradient: ChampionshipColors.greenGradient,
+                    border: Border.all(
+                      color: const Color(0xFF288E62),
+                      width: 1.2,
+                    ),
                     boxShadow: const [
                       BoxShadow(
                         color: Color(0x3014492E),
@@ -773,14 +777,18 @@ class ChampionshipModeCard extends StatelessWidget {
             ),
             const SizedBox(width: 10),
 
-            // Right: Green circular play button with white ▶
+            // Right: Green circular play button with golden ring and white ▶
             Container(
-              width: 38,
-              height: 38,
-              decoration: const BoxDecoration(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: ChampionshipColors.playButtonGradient,
-                boxShadow: [
+                border: Border.all(
+                  color: const Color(0xFFD6B24E),
+                  width: 1.4,
+                ),
+                boxShadow: const [
                   BoxShadow(
                     color: Color(0x3514492E),
                     blurRadius: 8,

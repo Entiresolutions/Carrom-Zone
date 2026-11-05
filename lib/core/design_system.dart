@@ -168,7 +168,7 @@ class ClubBackgroundAssets {
       case ClubBackgroundPreset.splash:
         return Alignment.center;
       case ClubBackgroundPreset.home:
-        return const Alignment(0.25, 0.0);
+        return Alignment.topCenter;
       case ClubBackgroundPreset.gameplay:
       case ClubBackgroundPreset.secondary:
         return Alignment.center;
@@ -220,6 +220,7 @@ class ClubBackground extends StatelessWidget {
     final double dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0;
     final String assetPath = ClubBackgroundAssets.assetFor(preset);
     final Alignment imageAlignment = ClubBackgroundAssets.alignmentFor(preset);
+    final bool isHome = preset == ClubBackgroundPreset.home;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -232,27 +233,41 @@ class ClubBackground extends StatelessWidget {
         return Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.bgGradientTop,
-                AppColors.bgGradientMid,
-                AppColors.bgGradientBottom,
-              ],
-              stops: [0.0, 0.55, 1.0],
-            ),
+          decoration: BoxDecoration(
+            gradient: isHome
+                ? const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFFF9DAB4),
+                      Color(0xFFE3BA90),
+                      Color(0xFFDAAF82),
+                    ],
+                    stops: [0.0, 0.40, 1.0],
+                  )
+                : const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      AppColors.bgGradientTop,
+                      AppColors.bgGradientMid,
+                      AppColors.bgGradientBottom,
+                    ],
+                    stops: [0.0, 0.55, 1.0],
+                  ),
           ),
           child: Stack(
             fit: StackFit.expand,
             children: [
               // 1. Optimized Responsive WebP Background Image
+              // For Home, use BoxFit.contain with top-center alignment to ensure the entire
+              // background (including the left/right decorative carrom coins) is 100% visible
+              // without any cropping or distortion across all mobile screen aspect ratios.
               Positioned.fill(
                 child: Image.asset(
                   assetPath,
-                  fit: BoxFit.cover,
-                  alignment: imageAlignment,
+                  fit: isHome ? BoxFit.contain : BoxFit.cover,
+                  alignment: isHome ? Alignment.topCenter : imageAlignment,
                   cacheWidth: decodeWidth,
                   filterQuality: FilterQuality.medium,
                   gaplessPlayback: true,
@@ -263,9 +278,8 @@ class ClubBackground extends StatelessWidget {
                 ),
               ),
 
-              // 1b. Atmospheric Depth Blur (Home & Secondary) to eliminate background noise
-              if (preset == ClubBackgroundPreset.home ||
-                  preset == ClubBackgroundPreset.secondary)
+              // 1b. Atmospheric Depth Blur (Secondary only)
+              if (preset == ClubBackgroundPreset.secondary)
                 Positioned.fill(
                   child: IgnorePointer(
                     child: BackdropFilter(
@@ -287,13 +301,12 @@ class ClubBackground extends StatelessWidget {
               ),
 
               // 3. Subtle Ambient Lighting (without outer box clutter)
-              if (showWatermark)
+              if (showWatermark && !isHome)
                 IgnorePointer(
                   child: CustomPaint(
                     painter: _ClubBackdropPainter(
                       accentTint: accentTint ?? AppColors.tealPrimary,
-                      subtleMode: preset == ClubBackgroundPreset.splash ||
-                          preset == ClubBackgroundPreset.home,
+                      subtleMode: preset == ClubBackgroundPreset.splash,
                     ),
                   ),
                 ),
@@ -321,16 +334,14 @@ class ClubBackground extends StatelessWidget {
         );
 
       case ClubBackgroundPreset.home:
-        return LinearGradient(
+        return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            const Color(0xFFFAF6EE).withOpacity(0.85),
-            const Color(0xFFF5EFE6).withOpacity(0.72),
-            const Color(0xFFF0E7D6).withOpacity(0.80),
-            const Color(0xFFE6DBC9).withOpacity(0.92),
+            Colors.transparent,
+            Colors.transparent,
           ],
-          stops: const [0.0, 0.35, 0.70, 1.0],
+          stops: [0.0, 1.0],
         );
 
       case ClubBackgroundPreset.gameplay:
@@ -692,14 +703,14 @@ class CarromZoneLogo extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: AppColors.gold.withOpacity(0.24),
-            blurRadius: size * 0.22,
-            spreadRadius: 2,
+            color: const Color(0xFFD4AF37).withOpacity(0.25),
+            blurRadius: size * 0.20,
+            spreadRadius: 1,
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.55),
-            blurRadius: size * 0.16,
-            offset: const Offset(0, 8),
+            color: const Color(0x28000000),
+            blurRadius: size * 0.12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

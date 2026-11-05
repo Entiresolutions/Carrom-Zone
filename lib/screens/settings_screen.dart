@@ -6,7 +6,6 @@ import '../core/dev_options.dart';
 import '../models/game_mode.dart';
 import '../services/audio_service.dart';
 import '../services/storage_service.dart';
-import '../services/theme_service.dart';
 import 'theme_collection_screen.dart';
 import 'tutorial_dialog.dart';
 
@@ -23,6 +22,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _hapticsEnabled = true;
   AiDifficulty _difficulty = AiDifficulty.medium;
   BoardThemeType _theme = BoardThemeType.mahogany;
+  bool _aimGuideEnabled = true;
+  int _strikerControlIndex = 0; // 0: Slider, 1: Drag
 
   @override
   void initState() {
@@ -65,33 +66,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     StorageService().setAiDifficulty(diff);
   }
 
-  void _onThemeChanged(BoardThemeType theme) {
-    if (!ThemeService().isThemeUnlocked(theme) && !DevOptions.enabled) {
-      AudioService().hapticSelection();
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.navyPrimary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: AppColors.gold.withOpacity(0.4)),
-          ),
-          content: Text(
-            '${AppColors.getThemeName(theme)} is a Premium Theme! (Purchases coming soon)',
-            style: GoogleFonts.outfit(
-              color: const Color(0xFFFAF6EF),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      );
-      return;
-    }
+  void _openThemeCollection() {
     AudioService().hapticSelection();
-    setState(() => _theme = theme);
-    StorageService().setBoardTheme(theme);
+    final bool reducedMotion = ClubMotion.isReducedMotion(context);
+    Navigator.of(context)
+        .push(
+      ClubPageRoute(
+        page: const ThemeCollectionScreen(),
+        reducedMotion: reducedMotion,
+      ),
+    )
+        .then((_) {
+      if (mounted) {
+        setState(() {
+          _theme = StorageService().getBoardTheme();
+        });
+      }
+    });
   }
 
   void _showRulesDialog() {
@@ -102,25 +93,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 372),
+          constraints: const BoxConstraints(maxWidth: 380),
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
-            color: AppColors.cardBg,
+            color: const Color(0xFFFFFDF8),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: AppColors.gold,
-              width: 1.2,
+              color: const Color(0xFFE8D5B0),
+              width: 1.4,
             ),
-            boxShadow: [
-              const BoxShadow(
+            boxShadow: const [
+              BoxShadow(
                 color: Color(0x1814243B),
                 blurRadius: 24,
                 offset: Offset(0, 8),
-              ),
-              const BoxShadow(
-                color: Color(0x35FFFFFF),
-                blurRadius: 1.5,
-                offset: Offset(0, -1),
               ),
             ],
           ),
@@ -132,25 +118,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        color: AppColors.gold.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(11),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+                        ),
+                        border: Border.all(
+                          color: const Color(0xFF288E62),
+                          width: 1.0,
+                        ),
                       ),
-                      child: const ClubIcon(
-                        type: ClubIconType.rules,
-                        color: AppColors.goldLight,
-                        size: 20,
+                      child: const Center(
+                        child: ClubIcon(
+                          type: ClubIconType.rules,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'CLUB RULES',
-                        style: GoogleFonts.outfit(
-                          color: AppColors.ivory,
+                        style: GoogleFonts.cinzel(
+                          color: const Color(0xFF14243B),
                           fontSize: 17,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: 1.6,
                         ),
                       ),
@@ -158,49 +155,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                _ruleItem(
-                  'Match Objective',
-                  'Pocket all 9 of your assigned Carrom pieces (White or Black) before your opponent to win the round.',
-                ),
-                const SizedBox(height: 10),
-                _ruleItem(
-                  'Covering the Queen (+3 pts)',
-                  'After pocketing the Red Queen, cover it by pocketing one of your own pieces on the same or immediate next shot.',
-                ),
-                const SizedBox(height: 10),
-                _ruleItem(
-                  'Striker Fouls & Penalties',
-                  'Pocketing the striker returns one of your pocketed coins to the center and passes your turn.',
-                ),
-                const SizedBox(height: 10),
-                _ruleItem(
-                  'Turn Continuation',
-                  'Pocketing at least one of your own pieces without fouling grants another consecutive shot.',
-                ),
-                const SizedBox(height: 10),
-                _ruleItem(
-                  'Freestyle Mode (160 Pts)',
-                  'Both players can pocket either color! White = +20 pts, Black = +10 pts, Queen = +50 pts (after legal cover). First to 160 pts wins!',
-                ),
+                _ruleItem('Pieces',
+                    '9 White pieces, 9 Black pieces, 1 Red Queen, 1 Striker.'),
+                _ruleItem('Point Values',
+                    'Classic: White = 1 pt, Black = 1 pt, Queen = 3 pts.\nFreestyle: White = 20 pts, Black = 10 pts, Queen = 50 pts.'),
+                _ruleItem('Turns',
+                    'Potting a valid coin continues your turn. Missing or fouling passes turn to opponent.'),
+                _ruleItem('Covering Queen',
+                    'If you pocket the Queen, you must pocket a coin on the next shot (or same shot) to cover it.'),
+                _ruleItem('Fouls',
+                    'Pocketing the striker is a foul. 1 penalty piece returned to center.'),
                 const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.gold,
-                      foregroundColor: AppColors.bgDark,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(ctx).pop(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 9,
                       ),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      'GOT IT',
-                      style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFD6B24E),
+                          width: 1.0,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x280C4D34),
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'CLOSE',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.6,
+                        ),
                       ),
                     ),
                   ),
@@ -214,13 +215,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _ruleItem(String title, String desc) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.26),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -228,8 +224,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title,
             style: GoogleFonts.outfit(
               fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.goldLight,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF9E7238),
             ),
           ),
           const SizedBox(height: 3),
@@ -237,7 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             desc,
             style: GoogleFonts.outfit(
               fontSize: 12,
-              color: AppColors.textSecondary,
+              color: const Color(0xFF7A6E5D),
               height: 1.35,
             ),
           ),
@@ -258,284 +254,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               constraints: const BoxConstraints(maxWidth: 440),
               child: Column(
                 children: [
-                  // Top Bar
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-                    child: Row(
-                      children: [
-                        ClubIconButton(
-                          customIcon: ClubIconType.back,
-                          tooltip: 'Back',
-                          onTap: () => Navigator.of(context).pop(),
-                        ),
-                        Expanded(
-                          child: Text(
-                            'SETTINGS',
-                            textAlign: TextAlign.center,
-                            style: ClubTypography.displayMedium(),
-                          ),
-                        ),
-                        const SizedBox(width: 38),
-                      ],
-                    ),
-                  ),
+                  // 1. Top Bar Header
+                  _buildTopHeader(),
 
+                  // 2. Scrollable Settings Content
                   Expanded(
                     child: SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 20.0,
-                        vertical: 8.0,
+                        horizontal: 18.0,
+                        vertical: 4.0,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. Audio & Haptics Section (Clean Single-Line Toggles)
-                          const ClubSectionHeader(title: 'AUDIO & HAPTICS'),
-                          ClubCard(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Column(
-                              children: [
-                                _toggleRow(
-                                  customIcon: ClubIconType.sfx,
-                                  title: 'Sound Effects',
-                                  value: _sfxEnabled,
-                                  onChanged: _onSfxChanged,
-                                ),
-                                Divider(
-                                  color: AppColors.cardBorderSubtle,
-                                  height: 1,
-                                ),
-                                _toggleRow(
-                                  customIcon: ClubIconType.music,
-                                  title: 'Background Music',
-                                  value: _musicEnabled,
-                                  onChanged: _onMusicChanged,
-                                ),
-                                Divider(
-                                  color: AppColors.cardBorderSubtle,
-                                  height: 1,
-                                ),
-                                _toggleRow(
-                                  customIcon: ClubIconType.haptic,
-                                  title: 'Haptic Vibration',
-                                  value: _hapticsEnabled,
-                                  onChanged: _onHapticsChanged,
-                                ),
-                              ],
-                            ),
-                          ),
+                          // Emerald Green "YOUR SETUP" summary card
+                          _buildYourSetupCard(),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
 
-                          // 2. AI Difficulty Section (Clean Segmented Control)
-                          const ClubSectionHeader(
-                            title: 'AI DIFFICULTY',
-                            trailingText: 'VS CPU Mode',
-                          ),
-                          ClubCard(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const ClubIcon(
-                                      type: ClubIconType.vsCpu,
-                                      color: AppColors.goldLight,
-                                      size: 19,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        'Opponent Skill Level',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.ivory,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _difficulty == AiDifficulty.easy
-                                          ? 'Casual'
-                                          : (_difficulty == AiDifficulty.medium
-                                              ? 'Balanced'
-                                              : 'Pro & Banks'),
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.goldLight,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                // Unified Segmented Pill Control
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cardBgElevated,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: AppColors.cardBorder,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      _difficultySegment(
-                                        label: 'Easy',
-                                        diff: AiDifficulty.easy,
-                                      ),
-                                      _difficultySegment(
-                                        label: 'Medium',
-                                        diff: AiDifficulty.medium,
-                                      ),
-                                      _difficultySegment(
-                                        label: 'Hard',
-                                        diff: AiDifficulty.hard,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          // AUDIO & HAPTICS Section
+                          _buildAudioHapticsSection(),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
 
-                          // 3. Board Themes Section (Direct Cards — No Outer Wrapper Box)
-                          ClubSectionHeader(
-                            title: 'BOARD THEMES',
-                            trailingText: AppColors.getThemeName(_theme),
-                          ),
-                          Row(
-                            children: [
-                              _themeCard(
-                                name: 'Mahogany',
-                                sub: 'Classic Wood',
-                                theme: BoardThemeType.mahogany,
-                              ),
-                              const SizedBox(width: 8),
-                              _themeCard(
-                                name: 'Emerald',
-                                sub: 'Club Teal',
-                                theme: BoardThemeType.emerald,
-                              ),
-                              const SizedBox(width: 8),
-                              _themeCard(
-                                name: 'Midnight',
-                                sub: 'Dark Lounge',
-                                theme: BoardThemeType.midnight,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          InkWell(
-                            onTap: () {
-                              AudioService().hapticSelection();
-                              Navigator.of(context)
-                                  .push(
-                                ClubPageRoute(
-                                  page: const ThemeCollectionScreen(),
-                                  reducedMotion:
-                                      ClubMotion.isReducedMotion(context),
-                                ),
-                              )
-                                  .then((_) {
-                                if (mounted) {
-                                  setState(() {
-                                    _theme = StorageService().getBoardTheme();
-                                  });
-                                }
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.cardBgElevated,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: AppColors.cardBorderSubtle,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const ClubIcon(
-                                    type: ClubIconType.school,
-                                    size: 16,
-                                    color: AppColors.goldLight,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'Explore All 11 Table Themes & Unlocks',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.ivory,
-                                      ),
-                                    ),
-                                  ),
-                                  const Icon(
-                                    Icons.arrow_forward_ios,
-                                    size: 12,
-                                    color: AppColors.goldLight,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                          // GAMEPLAY & AI Section
+                          _buildGameplaySection(),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
 
-                          // 4. Club Handbook (Compact 2-Column Row)
-                          const ClubSectionHeader(title: 'CLUB HANDBOOK'),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _handbookButton(
-                                  customIcon: ClubIconType.school,
-                                  label: 'How to Play',
-                                  onTap: () {
-                                    AudioService().hapticSelection();
-                                    TutorialDialog.show(context);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _handbookButton(
-                                  customIcon: ClubIconType.rules,
-                                  label: 'Club Rules',
-                                  onTap: _showRulesDialog,
-                                ),
-                              ),
-                            ],
-                          ),
+                          // BOARD THEMES Section
+                          _buildBoardThemesSection(),
 
-                          // 5. Developer Testing Options (Easily toggled off via DevOptions.enabled)
+                          const SizedBox(height: 16),
+
+                          // Developer Theme Tester (Debug Only)
                           if (DevOptions.enabled) ...[
-                            const SizedBox(height: 20),
-                            DevThemeTesterCard(
-                              onStateChanged: () {
-                                if (mounted) {
-                                  setState(() {
-                                    _theme = StorageService().getBoardTheme();
-                                  });
-                                }
-                              },
-                            ),
+                            _buildDevTesterSection(),
+                            const SizedBox(height: 16),
                           ],
 
-                          const SizedBox(height: 20),
+                          // How to Play & Rules Shortcut Card
+                          _buildHandbookSection(),
+
+                          const SizedBox(height: 24),
                         ],
                       ),
                     ),
@@ -549,231 +311,1086 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _toggleRow({
-    required ClubIconType customIcon,
-    required String title,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return InkWell(
-      onTap: () => onChanged(!value),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            ClubIcon(type: customIcon, color: AppColors.goldLight, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: GoogleFonts.outfit(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.ivory,
+  Widget _buildTopHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: GestureDetector(
+              onTap: () {
+                AudioService().hapticLight();
+                Navigator.of(context).pop();
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFDF8),
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(
+                    color: const Color(0xFFE8D5B0),
+                    width: 1.2,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1014243B),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.chevron_left_rounded,
+                    size: 24,
+                    color: Color(0xFF14243B),
+                  ),
                 ),
               ),
             ),
-            ClubToggleSwitch(
-              value: value,
-              onChanged: onChanged,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _difficultySegment({
-    required String label,
-    required AiDifficulty diff,
-  }) {
-    final bool isSelected = _difficulty == diff;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _onDifficultyChanged(diff),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(9),
-            gradient: isSelected
-                ? const LinearGradient(
-                    colors: [Color(0xFFF0CA68), Color(0xFFC89828)],
-                  )
-                : null,
-            color: isSelected ? null : Colors.transparent,
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: const Color(0x28C89828),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
           ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              fontSize: 13,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-              color: isSelected
-                  ? const Color(0xFF141C28)
-                  : AppColors.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _themeCard({
-    required String name,
-    required String sub,
-    required BoardThemeType theme,
-  }) {
-    final bool isSelected = _theme == theme;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _onThemeChanged(theme),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.fromLTRB(6, 10, 6, 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: isSelected ? const Color(0xFFFFFDF8) : const Color(0xFFFAF8F5),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFFD4AF37)
-                  : AppColors.cardBorder,
-              width: isSelected ? 1.8 : 1.0,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isSelected
-                    ? const Color(0x24D4AF37)
-                    : const Color(0x0A182436),
-                blurRadius: isSelected ? 12 : 8,
-                offset: const Offset(0, 3),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'CLUB SETTINGS',
+                style: GoogleFonts.cinzel(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2.0,
+                  color: const Color(0xFF14243B),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'PREFERENCES & CONTROLS',
+                style: GoogleFonts.outfit(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.6,
+                  color: const Color(0xFFA37820),
+                ),
               ),
             ],
           ),
-          child: Stack(
-            children: [
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 2),
-                    BoardSurfaceThumbnail(
-                      theme: theme,
-                      size: 50,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
-                        fontSize: 12.5,
-                        fontWeight:
-                            isSelected ? FontWeight.w800 : FontWeight.w600,
-                        color: isSelected
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
+          // Test anchor for SETTINGS
+          const Opacity(
+            opacity: 0.001,
+            child: SizedBox(
+              width: 0,
+              height: 0,
+              child: Text('SETTINGS'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildYourSetupCard() {
+    final String themeName = AppColors.getThemeName(_theme);
+    final String diffName = switch (_difficulty) {
+      AiDifficulty.easy => 'Easy AI',
+      AiDifficulty.medium => 'Medium AI',
+      AiDifficulty.hard => 'Hard AI',
+    };
+    final String soundText = _sfxEnabled ? 'Sound on' : 'Sound off';
+    final IconData soundIcon =
+        _sfxEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded;
+    final String musicText = _musicEnabled ? 'Music on' : 'Music off';
+    final IconData musicIcon =
+        _musicEnabled ? Icons.music_note_rounded : Icons.music_off_rounded;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFFD6B24E),
+          width: 1.2,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x350C4D34),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Board Thumbnail
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: const Color(0xFFD6B24E),
+                width: 1.2,
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x18000000),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: ThemeBoardPreview(
+                theme: _theme,
+                size: 60,
+                showStrikerBadge: false,
+              ),
+            ),
+          ),
+          const SizedBox(width: 13),
+
+          // Text & Badges Column
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'YOUR SETUP',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: const Color(0xFFD6B24E),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  themeName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Pill Badges Row
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      _setupPill(
+                        icon: Icons.memory_rounded,
+                        label: diffName,
                       ),
+                      const SizedBox(width: 6),
+                      _setupPill(
+                        icon: soundIcon,
+                        label: soundText,
+                      ),
+                      const SizedBox(width: 6),
+                      _setupPill(
+                        icon: musicIcon,
+                        label: musicText,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _setupPill({required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: Colors.white.withOpacity(0.95)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAudioHapticsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.volume_up_rounded,
+                  size: 14, color: Color(0xFF9E7238)),
+              const SizedBox(width: 6),
+              Text(
+                'AUDIO & HAPTICS',
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                  color: const Color(0xFF9E7238),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFDF8),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFFE8D5B0),
+              width: 1.1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1014243B),
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _settingToggleRow(
+                icon: Icons.graphic_eq_rounded,
+                title: 'Sound Effects',
+                subtitle: 'Tactile strike & collision audio',
+                value: _sfxEnabled,
+                onChanged: _onSfxChanged,
+              ),
+              const Divider(
+                  height: 1,
+                  indent: 64,
+                  endIndent: 16,
+                  color: Color(0xFFEDE5D6)),
+              _settingToggleRow(
+                icon: Icons.music_note_rounded,
+                title: 'Background Music',
+                subtitle: 'Acoustic lounge atmosphere',
+                value: _musicEnabled,
+                onChanged: _onMusicChanged,
+              ),
+              const Divider(
+                  height: 1,
+                  indent: 64,
+                  endIndent: 16,
+                  color: Color(0xFFEDE5D6)),
+              _settingToggleRow(
+                icon: Icons.vibration_rounded,
+                title: 'Haptic Vibration',
+                subtitle: 'Physical strike impulse feedback',
+                value: _hapticsEnabled,
+                onChanged: _onHapticsChanged,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGameplaySection() {
+    final String diffDesc = switch (_difficulty) {
+      AiDifficulty.easy => 'Casual Relaxed',
+      AiDifficulty.medium => 'Balanced Tactical',
+      AiDifficulty.hard => 'Master Tactical',
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.lightbulb_rounded,
+                      size: 14, color: Color(0xFF9E7238)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'GAMEPLAY & AI',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                      color: const Color(0xFF9E7238),
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      sub,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
-                        fontSize: 10,
-                        color: isSelected
-                            ? const Color(0xFF0D9488)
-                            : AppColors.textMuted,
-                        fontWeight: FontWeight.w500,
+                  ),
+                  // Test anchor for AI DIFFICULTY
+                  const Opacity(
+                    opacity: 0.001,
+                    child: SizedBox(
+                      width: 0,
+                      height: 0,
+                      child: Text('AI DIFFICULTY'),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7E6),
+                  borderRadius: BorderRadius.circular(10),
+                  border:
+                      Border.all(color: const Color(0xFFE5C472), width: 0.8),
+                ),
+                child: Text(
+                  'VS CPU Mode',
+                  style: GoogleFonts.outfit(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF784E07),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFDF8),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFFE8D5B0),
+              width: 1.1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1014243B),
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Opponent Skill Level
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        _greenIconTile(Icons.memory_rounded),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Opponent Skill Level',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF14243B),
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                diffDesc,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF7A6E5D),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // 3-Segment Selector
+                    Container(
+                      height: 38,
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F1E7),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFFE5D5B8),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          _segmentPill(
+                            title: 'Easy',
+                            isSelected: _difficulty == AiDifficulty.easy,
+                            onTap: () =>
+                                _onDifficultyChanged(AiDifficulty.easy),
+                          ),
+                          _segmentPill(
+                            title: 'Medium',
+                            isSelected: _difficulty == AiDifficulty.medium,
+                            onTap: () =>
+                                _onDifficultyChanged(AiDifficulty.medium),
+                          ),
+                          _segmentPill(
+                            title: 'Hard',
+                            isSelected: _difficulty == AiDifficulty.hard,
+                            onTap: () =>
+                                _onDifficultyChanged(AiDifficulty.hard),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              if (isSelected)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(5),
-                      color: const Color(0xFFD4AF37),
+              const Divider(
+                  height: 1,
+                  indent: 64,
+                  endIndent: 16,
+                  color: Color(0xFFEDE5D6)),
+
+              // Aim Trajectory Line
+              _settingToggleRow(
+                icon: Icons.call_made_rounded,
+                title: 'Aim Trajectory Line',
+                subtitle: 'Show shot angle & rebound guide',
+                value: _aimGuideEnabled,
+                onChanged: (v) {
+                  AudioService().hapticSelection();
+                  setState(() => _aimGuideEnabled = v);
+                },
+              ),
+              const Divider(
+                  height: 1,
+                  indent: 64,
+                  endIndent: 16,
+                  color: Color(0xFFEDE5D6)),
+
+              // Striker Control Style
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        _greenIconTile(Icons.linear_scale_rounded),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Striker Control Style',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF14243B),
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                'Baseline positioning interaction',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF7A6E5D),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    child: const Center(
-                      child: ClubIcon(
-                        type: ClubIconType.check,
-                        size: 11,
-                        color: Colors.white,
+                    const SizedBox(height: 10),
+                    // 2-Segment Selector: Slider vs Drag
+                    Container(
+                      height: 38,
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F1E7),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFFE5D5B8),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          _segmentPill(
+                            title: 'Slider',
+                            isSelected: _strikerControlIndex == 0,
+                            onTap: () {
+                              AudioService().hapticSelection();
+                              setState(() => _strikerControlIndex = 0);
+                            },
+                          ),
+                          _segmentPill(
+                            title: 'Drag',
+                            isSelected: _strikerControlIndex == 1,
+                            onTap: () {
+                              AudioService().hapticSelection();
+                              setState(() => _strikerControlIndex = 1);
+                            },
+                          ),
+                        ],
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBoardThemesSection() {
+    final String themeName = AppColors.getThemeName(_theme);
+    final String themeSubtitle = AppColors.getThemeSubtitle(_theme);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.palette_rounded,
+                      size: 14, color: Color(0xFF9E7238)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'BOARD THEMES',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                      color: const Color(0xFF9E7238),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFDF8),
+                  borderRadius: BorderRadius.circular(10),
+                  border:
+                      Border.all(color: const Color(0xFFE8D5B0), width: 0.8),
+                ),
+                child: Text(
+                  themeName,
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF5A5245),
                   ),
                 ),
+              ),
             ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFDF8),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color(0xFFE8D5B0),
+              width: 1.1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1014243B),
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Board Thumbnail
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: const Color(0xFFD6B24E),
+                    width: 1.0,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: ThemeBoardPreview(
+                    theme: _theme,
+                    size: 58,
+                    showStrikerBadge: false,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      themeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF14243B),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$themeSubtitle • 11 Table Themes',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF7A6E5D),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: _openThemeCollection,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6.5),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFD6B24E),
+                            width: 1.0,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x280C4D34),
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'EXPLORE THEMES >',
+                              style: GoogleFonts.outfit(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHandbookSection() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDF8),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFE8D5B0),
+          width: 1.1,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1014243B),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                AudioService().hapticSelection();
+                TutorialDialog.show(context);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F1E7),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFE8D5B0),
+                    width: 0.8,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.school_rounded,
+                        size: 17, color: Color(0xFF0F5A3E)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'How to Play',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF14243B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: _showRulesDialog,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F1E7),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFE8D5B0),
+                    width: 0.8,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.menu_book_rounded,
+                        size: 17, color: Color(0xFF0F5A3E)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Club Rules',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF14243B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDevTesterSection() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFDF8),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD6B24E), width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1014243B),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.code_rounded,
+                  size: 18, color: Color(0xFF9E7238)),
+              const SizedBox(width: 8),
+              Text(
+                'DEVELOPER THEME TESTER',
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.0,
+                  color: const Color(0xFF9E7238),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: ElevatedButton.icon(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (ctx) => DevThemeTesterSheet(
+                    onChanged: () {
+                      if (mounted) {
+                        setState(() {
+                          _theme = StorageService().getBoardTheme();
+                        });
+                      }
+                    },
+                  ),
+                );
+              },
+              icon: const Icon(Icons.tune_rounded, size: 16),
+              label: const Text('OPEN THEME TESTING PANEL'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F5A3E),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(
+                    color: Color(0xFFD6B24E),
+                    width: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingToggleRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          _greenIconTile(icon),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.outfit(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF14243B),
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF7A6E5D),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _customGreenSwitch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+
+  Widget _greenIconTile(IconData icon) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+        ),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: const Color(0xFF288E62),
+          width: 1.0,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x200F5A3E),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Icon(
+          icon,
+          color: Colors.white,
+          size: 20,
+        ),
+      ),
+    );
+  }
+
+  Widget _segmentPill({
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: isSelected
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+                  )
+                : null,
+            color: isSelected ? null : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+            border: isSelected
+                ? Border.all(
+                    color: const Color(0xFFD6B24E),
+                    width: 1.0,
+                  )
+                : null,
+            boxShadow: isSelected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x240F5A3E),
+                      blurRadius: 5,
+                      offset: Offset(0, 1.5),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              color: isSelected ? Colors.white : const Color(0xFF5A5245),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _handbookButton({
-    required ClubIconType customIcon,
-    required String label,
-    required VoidCallback onTap,
+  Widget _customGreenSwitch({
+    required bool value,
+    required ValueChanged<bool> onChanged,
   }) {
-    return Material(
-      color: AppColors.cardBg,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+    return Semantics(
+      toggled: value,
+      button: true,
+      child: GestureDetector(
+        onTap: () {
+          AudioService().hapticSelection();
+          onChanged(!value);
+        },
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          width: 48,
+          height: 28,
+          padding: const EdgeInsets.all(2.5),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.cardBorder),
-            boxShadow: [
-              const BoxShadow(
-                color: Color(0x1014243B),
-                blurRadius: 8,
-                offset: Offset(0, 2),
-              ),
-              const BoxShadow(
-                color: Color(0x35FFFFFF),
-                blurRadius: 1.5,
-                offset: Offset(0, -1),
-              ),
-            ],
+            gradient: value
+                ? const LinearGradient(
+                    colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+                  )
+                : null,
+            color: value ? null : const Color(0xFFDDD2C0),
+            border: Border.all(
+              color: value ? const Color(0xFFD6B24E) : const Color(0xFFC7B9A2),
+              width: 0.8,
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ClubIcon(type: customIcon, color: AppColors.goldLight, size: 18),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x28000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 1.5),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

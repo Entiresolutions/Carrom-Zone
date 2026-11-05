@@ -10,10 +10,7 @@ import '../services/storage_service.dart';
 import '../services/striker_asset_service.dart';
 import '../services/theme_service.dart';
 
-/// Dedicated, premium Theme Collection screen.
-///
-/// Features high-fidelity in-game previews for all 11 Carrom Zone themes,
-/// clean Free vs. Premium classification, locked states, and smooth theme activation.
+/// Dedicated, premium Theme Collection screen in Emerald Green + Gold + Cream style.
 class ThemeCollectionScreen extends StatefulWidget {
   const ThemeCollectionScreen({super.key});
 
@@ -55,14 +52,14 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
         backgroundColor: const Color(0xFF14243B),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFFD4AF37), width: 1.2),
+          side: const BorderSide(color: Color(0xFFD6B24E), width: 1.2),
         ),
         content: Row(
           children: [
-            const ClubIcon(
-              type: ClubIconType.check,
-              size: 18,
-              color: Color(0xFFD4AF37),
+            const Icon(
+              Icons.check_circle_rounded,
+              size: 20,
+              color: Color(0xFFD6B24E),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -87,14 +84,14 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 360),
+          constraints: const BoxConstraints(maxWidth: 380),
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
-            color: AppColors.cardBg,
+            color: const Color(0xFFFFFDF8),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: AppColors.gold, width: 1.4),
+            border: Border.all(color: const Color(0xFFE8D5B0), width: 1.4),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x2814243B),
@@ -109,11 +106,20 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  ThemeBoardPreview(
-                    theme: item.theme,
-                    size: 68,
-                    showStrikerBadge: false,
-                    borderRadius: BorderRadius.circular(14),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: const Color(0xFFD6B24E),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: ThemeBoardPreview(
+                      theme: item.theme,
+                      size: 68,
+                      showStrikerBadge: false,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   StrikerAssetService.buildPreview(
@@ -150,7 +156,7 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Text(
                 item.name.toUpperCase(),
                 textAlign: TextAlign.center,
@@ -158,17 +164,25 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.4,
-                  color: AppColors.ivory,
+                  color: const Color(0xFF14243B),
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                'PREMIUM TABLE THEME • ${item.priceDisplay}',
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.goldLight,
-                  letterSpacing: 0.8,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7E6),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE5C472), width: 0.8),
+                ),
+                child: Text(
+                  'PREMIUM TABLE THEME • ${item.priceDisplay}',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF784E07),
+                    letterSpacing: 0.6,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -176,26 +190,26 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                 item.description,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+                  fontSize: 12.5,
+                  color: const Color(0xFF7A6E5D),
                   height: 1.35,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBgElevated,
+                  color: const Color(0xFFF9F5EC),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.cardBorderSubtle),
+                  border: Border.all(color: const Color(0xFFEADFCF)),
                 ),
                 child: Row(
                   children: [
                     const Icon(
                       Icons.shopping_bag_outlined,
                       size: 18,
-                      color: AppColors.goldLight,
+                      color: Color(0xFF0F5A3E),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -203,7 +217,7 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                         'In-app purchases are coming soon! Google Play Billing integration is currently in preparation.',
                         style: GoogleFonts.outfit(
                           fontSize: 11,
-                          color: AppColors.textSecondary,
+                          color: const Color(0xFF6B6050),
                           height: 1.3,
                         ),
                       ),
@@ -218,7 +232,7 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(ctx).pop(),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.cardBorder),
+                        side: const BorderSide(color: Color(0xFFE2D6C3)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -229,7 +243,8 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          color: const Color(0xFF14243B),
+                          letterSpacing: 0.6,
                         ),
                       ),
                     ),
@@ -245,11 +260,16 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                           setState(_loadState);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFC5993B),
-                          foregroundColor: const Color(0xFF14243B),
+                          backgroundColor: const Color(0xFF0F5A3E),
+                          foregroundColor: Colors.white,
+                          elevation: 2,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(
+                              color: Color(0xFFD6B24E),
+                              width: 1.0,
+                            ),
                           ),
                         ),
                         child: Text(
@@ -257,6 +277,7 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
                           ),
                         ),
                       ),
@@ -292,38 +313,40 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
                     child: Row(
                       children: [
-                        ClubIconButton(
-                          customIcon: ClubIconType.back,
-                          tooltip: 'Back',
-                          onTap: () => Navigator.of(context).pop(),
-                        ),
+                        _buildBackButton(),
                         Expanded(
-                          child: Text(
-                            'THEME COLLECTION',
-                            textAlign: TextAlign.center,
-                            style: ClubTypography.displayMedium(),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'THEME COLLECTION',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 2.0,
+                                  color: const Color(0xFF14243B),
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'CHAMPIONSHIP TABLE STYLING',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.4,
+                                  color: const Color(0xFFA37820),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         if (DevOptions.enabled)
-                          ClubIconButton(
-                            customIcon: ClubIconType.school,
-                            tooltip: 'Dev Testing Console',
-                            iconColor: const Color(0xFFD4AF37),
-                            onTap: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (ctx) => DevThemeTesterSheet(
-                                  onChanged: () {
-                                    if (mounted) setState(_loadState);
-                                  },
-                                ),
-                              );
-                            },
-                          )
+                          _buildDevTesterButton()
                         else
-                          const SizedBox(width: 38), // Balance back button
+                          const SizedBox(width: 40), // Balance back button
                       ],
                     ),
                   ),
@@ -340,22 +363,18 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // Starter Themes Section
-                          const ClubSectionHeader(
-                            title: 'STARTER THEMES (FREE)',
-                          ),
-                          const SizedBox(height: 6),
+                          _buildSectionHeader('STARTER THEMES (FREE)'),
+                          const SizedBox(height: 8),
                           ...freeItems.map(_buildThemeCard),
 
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 16),
 
                           // Premium Championship Themes Section
-                          const ClubSectionHeader(
-                            title: 'CHAMPIONSHIP THEMES (PREMIUM)',
-                          ),
-                          const SizedBox(height: 6),
+                          _buildSectionHeader('CHAMPIONSHIP THEMES (PREMIUM)'),
+                          const SizedBox(height: 8),
                           ...premiumItems.map(_buildThemeCard),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
                         ],
                       ),
                     ),
@@ -369,167 +388,348 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
     );
   }
 
+  Widget _buildBackButton() {
+    return GestureDetector(
+      onTap: () {
+        AudioService().hapticSelection();
+        Navigator.of(context).pop();
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFDF8),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(
+            color: const Color(0xFFE8D5B0),
+            width: 1.2,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1014243B),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.chevron_left_rounded,
+            color: Color(0xFF14243B),
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDevTesterButton() {
+    return GestureDetector(
+      onTap: () {
+        AudioService().hapticSelection();
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => DevThemeTesterSheet(
+            onChanged: () {
+              if (mounted) setState(_loadState);
+            },
+          ),
+        );
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFDF8),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(
+            color: const Color(0xFFE8D5B0),
+            width: 1.2,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1014243B),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.tune_rounded,
+            color: Color(0xFF0F5A3E),
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 2),
+      child: Text(
+        title,
+        style: GoogleFonts.outfit(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.2,
+          color: const Color(0xFF9E7238),
+        ),
+      ),
+    );
+  }
+
   Widget _buildThemeCard(ThemeCatalogItem item) {
     final bool isSelected = item.isSelected;
     final bool isUnlocked = item.isUnlocked;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: GestureDetector(
         onTap: () => _selectTheme(item),
+        behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 180),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFFFFDF8) : AppColors.cardBg,
-            borderRadius: BorderRadius.circular(16),
+            color: isSelected
+                ? const Color(0xFFFFFFFF)
+                : const Color(0xFFFFFDF8),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFFD4AF37)
-                  : (isUnlocked
-                      ? AppColors.cardBorder
-                      : AppColors.cardBorderSubtle),
-              width: isSelected ? 1.8 : 1.0,
+                  ? const Color(0xFF0F5A3E)
+                  : const Color(0xFFE8D5B0),
+              width: isSelected ? 1.8 : 1.1,
             ),
             boxShadow: [
               BoxShadow(
                 color: isSelected
-                    ? const Color(0x24D4AF37)
+                    ? const Color(0x200F5A3E)
                     : const Color(0x1014243B),
-                blurRadius: isSelected ? 16 : 10,
-                offset: const Offset(0, 4),
+                blurRadius: isSelected ? 14 : 8,
+                offset: const Offset(0, 3),
               ),
               const BoxShadow(
-                color: Color(0x35FFFFFF),
+                color: Color(0x60FFFFFF),
                 blurRadius: 1.5,
                 offset: Offset(0, -1),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // 1. In-game theme preview thumbnail
-                ThemeBoardPreview(
-                  theme: item.theme,
-                  size: 52,
-                  isLocked: !isUnlocked,
-                  borderRadius: BorderRadius.circular(12),
+                // 1. In-game theme preview thumbnail with golden border
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isSelected
+                          ? const Color(0xFFD6B24E)
+                          : const Color(0xFFE2D6C3),
+                      width: 1.0,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 5,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ThemeBoardPreview(
+                    theme: item.theme,
+                    size: 52,
+                    isLocked: !isUnlocked,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
                 ),
 
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
 
-                // 2. Theme Name & Status Badge
+                // 2. Theme Name & Metadata
                 Expanded(
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
-                        child: Text(
-                          item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: isUnlocked
-                                ? AppColors.ivory
-                                : AppColors.textSecondary,
-                          ),
+                      Text(
+                        item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                          color: isUnlocked
+                              ? const Color(0xFF14243B)
+                              : const Color(0xFF5A5245),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      // Status Badge: Active / Free / Premium Lock
-                      if (isSelected)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD4AF37),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.check,
-                                size: 11,
-                                color: Color(0xFF14243B),
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                'ACTIVE',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF14243B),
-                                  letterSpacing: 0.6,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else if (!isUnlocked)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.cardBgElevated,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: AppColors.gold.withOpacity(0.3),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.lock,
-                                size: 10,
-                                color: AppColors.goldLight,
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                item.priceDisplay,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.goldLight,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else if (item.isFree)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE6F4EA),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'FREE',
-                            style: GoogleFonts.outfit(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF137333),
-                            ),
-                          ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.isFree
+                            ? 'Starter Table • Free Unlock'
+                            : 'Championship Club Edition',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF7A6E5D),
                         ),
+                      ),
                     ],
                   ),
                 ),
+
+                const SizedBox(width: 10),
+
+                // 3. Status Badge / Action Indicator
+                _buildStatusIndicator(item, isSelected, isUnlocked),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusIndicator(
+    ThemeCatalogItem item,
+    bool isSelected,
+    bool isUnlocked,
+  ) {
+    if (isSelected) {
+      // Emerald Green ACTIVE badge with golden checkmark
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFD6B24E),
+            width: 1.0,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x280C4D34),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.check_rounded,
+              size: 13,
+              color: Color(0xFFD6B24E),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'ACTIVE',
+              style: GoogleFonts.outfit(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!isUnlocked) {
+      // Gold/Amber LOCKED badge with price
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7E6),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFE5C472),
+            width: 0.9,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.lock_rounded,
+              size: 11,
+              color: Color(0xFF784E07),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              item.priceDisplay,
+              style: GoogleFonts.outfit(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF784E07),
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (item.isFree) {
+      // Light Green FREE badge
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F6ED),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFF91D4A8),
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          'FREE',
+          style: GoogleFonts.outfit(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF1B6A45),
+            letterSpacing: 0.6,
+          ),
+        ),
+      );
+    }
+
+    // Unlocked Premium Theme -> SELECT affordance
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F5A3E),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x200F5A3E),
+            blurRadius: 4,
+            offset: Offset(0, 1.5),
+          ),
+        ],
+      ),
+      child: Text(
+        'SELECT',
+        style: GoogleFonts.outfit(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+          letterSpacing: 0.6,
         ),
       ),
     );
