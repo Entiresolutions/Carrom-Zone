@@ -121,33 +121,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                         const SizedBox(height: 18),
 
-                        // Subtle Tagline Pill
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.cardBgElevated,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: AppColors.gold.withOpacity(0.55),
-                              width: 1.0,
-                            ),
-                          ),
-                          child: Text(
-                            'PLAY   •   COMPETE   •   MASTER',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.outfit(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 2.4,
-                              color: AppColors.goldLight,
-                            ),
-                          ),
-                        ),
-
-                        const Spacer(flex: 6),
+                        const Spacer(),
 
                         // Sleek Champagne-Gold Progress Bar
                         SizedBox(
