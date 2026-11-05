@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:carrom_master/core/game_config.dart';
 import 'package:carrom_master/core/vector2.dart';
@@ -6,6 +7,10 @@ import 'package:carrom_master/models/game_mode.dart';
 import 'package:carrom_master/models/piece_model.dart';
 import 'package:carrom_master/physics/carrom_physics.dart';
 import 'package:carrom_master/ai/carrom_ai.dart';
+import 'package:carrom_master/screens/menu_screen.dart';
+import 'package:carrom_master/screens/game_screen.dart';
+import 'package:carrom_master/services/storage_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('Carrom AI v2.1 Reliability & Balancing Benchmark Suite', () {
@@ -78,18 +83,19 @@ void main() {
 
     test('3. Configurable Difficulty Profiles & Jitter Hierarchy', () {
       expect(AiDifficultyConfig.easy.maxSimulations, equals(2));
-      expect(AiDifficultyConfig.medium.maxSimulations, equals(4));
-      expect(AiDifficultyConfig.hard.maxSimulations, equals(6));
+      expect(AiDifficultyConfig.medium.maxSimulations, equals(3));
+      expect(AiDifficultyConfig.hard.maxSimulations, equals(5));
 
-      expect(AiDifficultyConfig.easy.minCosTheta, equals(0.45));
-      expect(AiDifficultyConfig.medium.minCosTheta, equals(0.28));
-      expect(AiDifficultyConfig.hard.minCosTheta, equals(0.15));
+      expect(AiDifficultyConfig.easy.minCosTheta, equals(0.52));
+      expect(AiDifficultyConfig.medium.minCosTheta, equals(0.38));
+      expect(AiDifficultyConfig.hard.minCosTheta, equals(0.16));
 
       expect(AiDifficultyConfig.easy.allowBankShots, isFalse);
+      expect(AiDifficultyConfig.medium.allowBankShots, isFalse);
       expect(AiDifficultyConfig.hard.allowBankShots, isTrue);
 
-      expect(AiDifficultyConfig.easy.secondBestShotChance, equals(0.35));
-      expect(AiDifficultyConfig.medium.secondBestShotChance, equals(0.10));
+      expect(AiDifficultyConfig.easy.secondBestShotChance, equals(0.45));
+      expect(AiDifficultyConfig.medium.secondBestShotChance, equals(0.35));
       expect(AiDifficultyConfig.hard.secondBestShotChance, equals(0.0));
 
       expect(AiDifficultyConfig.easy.angleJitterSpread,
@@ -98,7 +104,7 @@ void main() {
           greaterThan(AiDifficultyConfig.hard.angleJitterSpread));
     });
 
-    test('4. Freestyle Scoring Weights: Balanced 10 / 20 / 50 Pt Relative Values', () {
+    test('4. Freestyle Scoring Weights: Balanced 20 / 10 / 50 Pt Relative Values', () {
       final queen = PieceModel(
         id: 1,
         type: PieceType.queen,
@@ -131,7 +137,7 @@ void main() {
 
       final ai = CarromAI(difficulty: AiDifficulty.hard);
 
-      // In Freestyle, all normal pieces are eligible, Black (20) prioritized over White (10)
+      // In Freestyle, all normal pieces are eligible, White (20) prioritized over Black (10)
       final shot = ai.calculateShot(
         pieces: [queen, blackCoin, whiteCoin],
         striker: striker,
@@ -266,6 +272,45 @@ void main() {
 
       expect(easyFreestyle['potRate'], lessThan(hardFreestyle['potRate'] as num),
           reason: 'Freestyle Easy must be lower than Freestyle Hard');
+    });
+
+    testWidgets('6. Pre-Match Difficulty Selection Dialog: User selects difficulty before match starts', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await StorageService().init();
+
+      await tester.binding.setSurfaceSize(const Size(450, 880));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MenuScreen(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Tap VS CPU
+      await tester.tap(find.text('VS CPU'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Dialog is displayed asking user for difficulty before match starts
+      expect(find.text('CHOOSE DIFFICULTY'), findsOneWidget);
+      expect(find.byType(Dialog), findsOneWidget);
+
+      // Select EASY difficulty option
+      await tester.tap(find.text('EASY'));
+      await tester.pump(const Duration(milliseconds: 150));
+
+      // Tap START MATCH (EASY) button
+      await tester.tap(find.textContaining('START MATCH (EASY)'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Match starts in GameScreen with Easy difficulty verified
+      expect(find.byType(GameScreen), findsOneWidget);
+      expect(StorageService().getAiDifficulty(), equals(AiDifficulty.easy));
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      await tester.binding.setSurfaceSize(null);
     });
   });
 }

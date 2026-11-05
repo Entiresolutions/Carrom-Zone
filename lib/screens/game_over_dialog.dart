@@ -160,10 +160,10 @@ class _GameOverDialogState extends State<GameOverDialog> {
 
     final String p1Label = isFreestyle
         ? (widget.gameMode == GameMode.passAndPlay ? 'Player 1' : 'You (P1)')
-        : 'White (P1)';
+        : (widget.gameMode == GameMode.passAndPlay ? 'Player 1 (White)' : 'You (White)');
     final String p2Label = isFreestyle
         ? (widget.gameMode == GameMode.vsCpu ? 'CPU (P2)' : 'Player 2')
-        : 'Black (P2/CPU)';
+        : (widget.gameMode == GameMode.vsCpu ? 'CPU (Black)' : 'Player 2 (Black)');
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -381,11 +381,38 @@ class _GameOverDialogState extends State<GameOverDialog> {
       ),
       child: Column(
         children: [
-          ClubCoinBadge(
-            theme: StorageService().getBoardTheme(),
-            isWhite: isWhiteCoin,
-            size: 22,
-          ),
+          if (isFreestyle)
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isHighlighted
+                    ? const Color(0xFFF7E6B8)
+                    : AppColors.cardBgElevated,
+                border: Border.all(
+                  color: isHighlighted ? AppColors.gold : AppColors.cardBorder,
+                  width: 1.0,
+                ),
+              ),
+              child: Icon(
+                isWhiteCoin
+                    ? Icons.person_rounded
+                    : (widget.gameMode == GameMode.vsCpu
+                        ? Icons.smart_toy_rounded
+                        : Icons.person_outline_rounded),
+                size: 15,
+                color: isHighlighted
+                    ? const Color(0xFF946A14)
+                    : AppColors.textSecondary,
+              ),
+            )
+          else
+            ClubCoinBadge(
+              theme: StorageService().getBoardTheme(),
+              isWhite: isWhiteCoin,
+              size: 22,
+            ),
           const SizedBox(height: 5),
           Text(
             label,

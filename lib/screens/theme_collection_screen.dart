@@ -3,8 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/app_colors.dart';
 import '../core/design_system.dart';
 import '../core/dev_options.dart';
+import '../models/piece_model.dart';
 import '../services/audio_service.dart';
+import '../services/piece_asset_service.dart';
 import '../services/storage_service.dart';
+import '../services/striker_asset_service.dart';
 import '../services/theme_service.dart';
 
 /// Dedicated, premium Theme Collection screen.
@@ -103,10 +106,49 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ThemeBoardPreview(
-                theme: item.theme,
-                size: 72,
-                borderRadius: BorderRadius.circular(14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ThemeBoardPreview(
+                    theme: item.theme,
+                    size: 68,
+                    showStrikerBadge: false,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  const SizedBox(width: 12),
+                  StrikerAssetService.buildPreview(
+                    theme: item.theme,
+                    size: 54,
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          PieceAssetService.buildPreview(
+                            theme: item.theme,
+                            type: PieceType.white,
+                            size: 26,
+                          ),
+                          const SizedBox(width: 4),
+                          PieceAssetService.buildPreview(
+                            theme: item.theme,
+                            type: PieceType.black,
+                            size: 26,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      PieceAssetService.buildPreview(
+                        theme: item.theme,
+                        type: PieceType.queen,
+                        size: 26,
+                      ),
+                    ],
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               Text(
@@ -256,24 +298,10 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                           onTap: () => Navigator.of(context).pop(),
                         ),
                         Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'THEME COLLECTION',
-                                textAlign: TextAlign.center,
-                                style: ClubTypography.displayMedium(),
-                              ),
-                              const SizedBox(height: 1),
-                              Text(
-                                '11 Championship Table Themes',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            'THEME COLLECTION',
+                            textAlign: TextAlign.center,
+                            style: ClubTypography.displayMedium(),
                           ),
                         ),
                         if (DevOptions.enabled)
@@ -314,22 +342,20 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                           // Starter Themes Section
                           const ClubSectionHeader(
                             title: 'STARTER THEMES (FREE)',
-                            trailingText: 'Always Unlocked',
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           ...freeItems.map(_buildThemeCard),
 
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 14),
 
                           // Premium Championship Themes Section
                           const ClubSectionHeader(
                             title: 'CHAMPIONSHIP THEMES (PREMIUM)',
-                            trailingText: 'Exclusive Table Finishes',
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           ...premiumItems.map(_buildThemeCard),
 
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 20),
                         ],
                       ),
                     ),
@@ -348,14 +374,14 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
     final bool isUnlocked = item.isUnlocked;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: GestureDetector(
         onTap: () => _selectTheme(item),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
             color: isSelected ? const Color(0xFFFFFDF8) : AppColors.cardBg,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isSelected
                   ? const Color(0xFFD4AF37)
@@ -380,149 +406,124 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // 1. In-game theme preview
+                // 1. In-game theme preview thumbnail
                 ThemeBoardPreview(
                   theme: item.theme,
-                  size: 78,
+                  size: 52,
                   isLocked: !isUnlocked,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                 ),
 
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
 
-                // 2. Metadata & Description
+                // 2. Theme Name & Status Badge
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.outfit(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: isUnlocked
-                                    ? AppColors.ivory
-                                    : AppColors.textSecondary,
-                              ),
-                            ),
+                      Expanded(
+                        child: Text(
+                          item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: isUnlocked
+                                ? AppColors.ivory
+                                : AppColors.textSecondary,
                           ),
-                          const SizedBox(width: 6),
-                          // Badge: Active / Free / Premium Price
-                          if (isSelected)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Status Badge: Active / Free / Premium Lock
+                      if (isSelected)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD4AF37),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.check,
+                                size: 11,
+                                color: Color(0xFF14243B),
                               ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD4AF37),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.check,
-                                    size: 11,
-                                    color: Color(0xFF14243B),
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    'ACTIVE',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: const Color(0xFF14243B),
-                                      letterSpacing: 0.6,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else if (!isUnlocked)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.cardBgElevated,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: AppColors.gold.withOpacity(0.3),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.lock,
-                                    size: 10,
-                                    color: AppColors.goldLight,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    item.priceDisplay,
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.goldLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else if (item.isFree)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE6F4EA),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'FREE',
+                              const SizedBox(width: 3),
+                              Text(
+                                'ACTIVE',
                                 style: GoogleFonts.outfit(
                                   fontSize: 9.5,
                                   fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF137333),
+                                  color: const Color(0xFF14243B),
+                                  letterSpacing: 0.6,
                                 ),
                               ),
+                            ],
+                          ),
+                        )
+                      else if (!isUnlocked)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBgElevated,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppColors.gold.withOpacity(0.3),
+                              width: 0.8,
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle,
-                        style: GoogleFonts.outfit(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.getThemeAccent(item.theme),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.lock,
+                                size: 10,
+                                color: AppColors.goldLight,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                item.priceDisplay,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.goldLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (item.isFree)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6F4EA),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'FREE',
+                            style: GoogleFonts.outfit(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF137333),
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                          height: 1.25,
-                        ),
-                      ),
                     ],
                   ),
                 ),

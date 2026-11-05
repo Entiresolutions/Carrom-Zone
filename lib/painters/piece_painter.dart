@@ -1,10 +1,13 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/game_config.dart';
 import '../core/theme_piece_style.dart';
 import '../core/vector2.dart';
 import '../models/piece_model.dart';
+import '../services/piece_asset_service.dart';
+import '../services/striker_asset_service.dart';
 
 /// Renders carrom pieces, queen, and striker with dedicated, theme-adaptive
 /// materials, lathe grooves, metallic bezels, specular highlights, and animations.
@@ -12,6 +15,7 @@ class PiecePainter extends CustomPainter {
   final BoardThemeType theme;
   final List<PieceModel> pieces;
   final PieceModel striker;
+  final ui.Image? strikerImage;
   final double strikerGlowPhase; // 0.0 to 1.0 for subtle breathing glow / idle gleam
   final bool isAiming;
   final double aimPower; // 0.0 to 1.0
@@ -22,6 +26,7 @@ class PiecePainter extends CustomPainter {
     this.theme = BoardThemeType.mahogany,
     required this.pieces,
     required this.striker,
+    this.strikerImage,
     this.strikerGlowPhase = 0.0,
     this.isAiming = false,
     this.aimPower = 0.0,
@@ -111,6 +116,35 @@ class PiecePainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.8),
     );
 
+    // 3. Render authentic 512x512 premium piece asset texture if preloaded
+    final ui.Image? pieceImage =
+        PieceAssetService.instance.getPiece(theme, piece.type);
+    if (pieceImage != null) {
+      final Rect srcRect = Rect.fromLTWH(
+        0,
+        0,
+        pieceImage.width.toDouble(),
+        pieceImage.height.toDouble(),
+      );
+      final Rect dstRect = Rect.fromCircle(center: pos, radius: r);
+      canvas.drawImageRect(
+        pieceImage,
+        srcRect,
+        dstRect,
+        Paint()..filterQuality = FilterQuality.high,
+      );
+
+      // Subtle top-left specular gloss sheen catching the overhead table lamp
+      final double sheenAlpha = piece.type == PieceType.black ? 0.30 : 0.45;
+      canvas.drawCircle(
+        Offset(pos.dx - r * 0.32, pos.dy - r * 0.32),
+        r * 0.18,
+        Paint()..color = Colors.white.withOpacity(sheenAlpha * shrink),
+      );
+      return;
+    }
+
+    // Procedural fallback when image texture is not yet loaded (or in headless unit tests)
     switch (piece.type) {
       case PieceType.queen:
         _drawQueenPiece(canvas, pos, r, shrink, style);
@@ -372,76 +406,319 @@ class PiecePainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5),
     );
 
-    // 4. Striker Main Body Radial Gradient
-    final Paint bodyPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.3, -0.3),
-        radius: 0.92,
-        colors: style.strikerGradient,
-        stops: const [0.0, 0.55, 0.85, 1.0],
-      ).createShader(Rect.fromCircle(center: pos, radius: r));
-    canvas.drawCircle(pos, r, bodyPaint);
+    final ui.Image? image =
+        strikerImage ?? StrikerAssetService.instance.getStriker(theme);
 
-    // 5. Theme-specific surface texture & micro-details
-    _drawStrikerThemeTexture(canvas, pos, r, shrink);
+    if (image != null) {
+      // Draw authentic 512x512 striker asset with anti-aliasing
+      final Rect srcRect = Rect.fromLTWH(
+        0,
+        0,
+        image.width.toDouble(),
+        image.height.toDouble(),
+      );
+      final Rect dstRect = Rect.fromCircle(center: pos, radius: r);
+      canvas.drawImageRect(
+        image,
+        srcRect,
+        dstRect,
+        Paint()..filterQuality = FilterQuality.high,
+      );
 
-    // 6. Outer dark definition bumper rim
-    canvas.drawCircle(
-      pos,
-      r - 0.5 * shrink,
-      Paint()
-        ..color = style.strikerOuterRim.withOpacity(0.70 * shrink)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0 * shrink,
-    );
+      // Render theme-specific visual animation overlay
+      _drawThemeSpecificStrikerAnimation(canvas, pos, r, shrink, style);
 
-    // 7. Outer metallic bezel ring
-    canvas.drawCircle(
-      pos,
-      r - 2.0 * shrink,
-      Paint()
-        ..color = style.strikerBezelRing.withOpacity(0.92 * shrink)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0 * shrink,
-    );
+      // Specular gloss glint sweep around perimeter
+      _drawStrikerIdleGleam(canvas, pos, r, shrink, style);
 
-    // 8. Inner decorative accent ring
-    canvas.drawCircle(
-      pos,
-      r * 0.66,
-      Paint()
-        ..color = style.strikerAccentRing.withOpacity(0.85 * shrink)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3 * shrink,
-    );
+      // Top-left curved gloss sheen
+      canvas.drawCircle(
+        Offset(pos.dx - r * 0.34, pos.dy - r * 0.34),
+        r * 0.20,
+        Paint()..color = Colors.white.withOpacity(0.35 * shrink),
+      );
+    } else {
+      // Procedural fallback when image texture is not yet loaded (or in headless unit tests)
+      // 4. Striker Main Body Radial Gradient
+      final Paint bodyPaint = Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.3, -0.3),
+          radius: 0.92,
+          colors: style.strikerGradient,
+          stops: const [0.0, 0.55, 0.85, 1.0],
+        ).createShader(Rect.fromCircle(center: pos, radius: r));
+      canvas.drawCircle(pos, r, bodyPaint);
 
-    // 9. Center theme-specific medallion emblem
-    _drawStrikerEmblem(canvas, pos, r, shrink, style);
+      // 5. Theme-specific surface texture & micro-details
+      _drawStrikerThemeTexture(canvas, pos, r, shrink);
 
-    // 10. Center jewel core pip & metal collar
-    canvas.drawCircle(
-      pos,
-      2.8 * shrink,
-      Paint()..color = style.strikerGemCore.withOpacity(0.95 * shrink),
-    );
-    canvas.drawCircle(
-      pos,
-      2.8 * shrink,
-      Paint()
-        ..color = style.strikerGemRim.withOpacity(0.95 * shrink)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.9 * shrink,
-    );
+      // 6. Outer dark definition bumper rim
+      canvas.drawCircle(
+        pos,
+        r - 0.5 * shrink,
+        Paint()
+          ..color = style.strikerOuterRim.withOpacity(0.70 * shrink)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0 * shrink,
+      );
 
-    // 11. Idle specular glint sweep around bezel
-    _drawStrikerIdleGleam(canvas, pos, r, shrink, style);
+      // 7. Outer metallic bezel ring
+      canvas.drawCircle(
+        pos,
+        r - 2.0 * shrink,
+        Paint()
+          ..color = style.strikerBezelRing.withOpacity(0.92 * shrink)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0 * shrink,
+      );
 
-    // 12. Top-left curved gloss sheen
-    canvas.drawCircle(
-      Offset(pos.dx - r * 0.34, pos.dy - r * 0.34),
-      r * 0.20,
-      Paint()..color = Colors.white.withOpacity(0.65 * shrink),
-    );
+      // 8. Inner decorative accent ring
+      canvas.drawCircle(
+        pos,
+        r * 0.66,
+        Paint()
+          ..color = style.strikerAccentRing.withOpacity(0.85 * shrink)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.3 * shrink,
+      );
+
+      // 9. Center theme-specific medallion emblem
+      _drawStrikerEmblem(canvas, pos, r, shrink, style);
+
+      // 10. Center jewel core pip & metal collar
+      canvas.drawCircle(
+        pos,
+        2.8 * shrink,
+        Paint()..color = style.strikerGemCore.withOpacity(0.95 * shrink),
+      );
+      canvas.drawCircle(
+        pos,
+        2.8 * shrink,
+        Paint()
+          ..color = style.strikerGemRim.withOpacity(0.95 * shrink)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.9 * shrink,
+      );
+
+      // 11. Idle specular glint sweep around bezel
+      _drawStrikerIdleGleam(canvas, pos, r, shrink, style);
+
+      // 12. Top-left curved gloss sheen
+      canvas.drawCircle(
+        Offset(pos.dx - r * 0.34, pos.dy - r * 0.34),
+        r * 0.20,
+        Paint()..color = Colors.white.withOpacity(0.65 * shrink),
+      );
+    }
+  }
+
+  void _drawThemeSpecificStrikerAnimation(
+    Canvas canvas,
+    Offset pos,
+    double r,
+    double shrink,
+    ThemePieceStyle style,
+  ) {
+    switch (theme) {
+      case BoardThemeType.mahogany:
+        // 1. Classic Birch & Rosewood — Warm diagonal reflection sweep
+        canvas.save();
+        canvas.clipPath(Path()..addOval(Rect.fromCircle(center: pos, radius: r * 0.96)));
+        final double sweepProgress = (strikerGlowPhase * 2.2 - 0.6);
+        final double sweepOffset = sweepProgress * (r * 2.5);
+        final Paint sweepPaint = Paint()
+          ..shader = LinearGradient(
+            begin: const Alignment(-1.0, -1.0),
+            end: const Alignment(1.0, 1.0),
+            colors: [
+              Colors.white.withOpacity(0.0),
+              const Color(0xFFFFFBEB).withOpacity(0.28 * shrink),
+              Colors.white.withOpacity(0.0),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+          ).createShader(Rect.fromLTWH(
+            pos.dx - r + sweepOffset,
+            pos.dy - r + sweepOffset,
+            r * 0.8,
+            r * 0.8,
+          ));
+        canvas.drawCircle(pos, r, sweepPaint);
+        canvas.restore();
+        break;
+
+      case BoardThemeType.emerald:
+        // 2. Heritage Club Teal — Subtle pulsating teal halo ring
+        final double tealPulse =
+            (0.25 + 0.22 * math.sin(strikerGlowPhase * math.pi * 2)).clamp(0.0, 1.0);
+        canvas.drawCircle(
+          pos,
+          r * 0.86,
+          Paint()
+            ..color = const Color(0xFF14B8A6).withOpacity(tealPulse * shrink)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (1.4 + 0.8 * math.sin(strikerGlowPhase * math.pi * 2)) * shrink
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5),
+        );
+        break;
+
+      case BoardThemeType.midnight:
+        // 3. Royal Navy Lounge — Refined gold star shimmer
+        final double shimmerAlpha =
+            (0.30 + 0.35 * math.sin(strikerGlowPhase * math.pi * 2)).clamp(0.0, 1.0);
+        final double starSize =
+            (0.32 + 0.10 * math.sin(strikerGlowPhase * math.pi * 2)) * r;
+        _drawCompassStar(
+          canvas,
+          pos,
+          4,
+          starSize,
+          starSize * 0.24,
+          const Color(0xFFFBBF24).withOpacity(shimmerAlpha * shrink),
+          shrink,
+        );
+        break;
+
+      case BoardThemeType.walnutClub:
+        // 4. Walnut Club — Metallic brass gleam rotating along rim
+        final double brassAngle = strikerGlowPhase * 2 * math.pi;
+        final double brassR = r * 0.84;
+        final Offset brassPos = Offset(
+          pos.dx + brassR * math.cos(brassAngle),
+          pos.dy + brassR * math.sin(brassAngle),
+        );
+        canvas.drawCircle(
+          brassPos,
+          3.5 * shrink,
+          Paint()
+            ..color = const Color(0xFFFDE68A).withOpacity(0.65 * shrink)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0),
+        );
+        break;
+
+      case BoardThemeType.royalIndigo:
+        // 5. Royal Indigo — Sapphire lotus radiance reflection
+        final double lotusGlow =
+            (0.22 + 0.18 * math.cos(strikerGlowPhase * math.pi * 2)).clamp(0.0, 1.0);
+        canvas.drawCircle(
+          pos,
+          r * 0.42,
+          Paint()
+            ..color = const Color(0xFFC084FC).withOpacity(lotusGlow * shrink)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5),
+        );
+        break;
+
+      case BoardThemeType.emeraldLounge:
+        // 6. Emerald Lounge — Faceted diamond emerald glint
+        final double facetPhase = strikerGlowPhase * 2 * math.pi;
+        for (int i = 0; i < 2; i++) {
+          final double angle = facetPhase + (i * math.pi);
+          final double glintDist = r * 0.62;
+          final Offset glintPos = Offset(
+            pos.dx + glintDist * math.cos(angle),
+            pos.dy + glintDist * math.sin(angle),
+          );
+          final double glintAlpha =
+              (0.35 + 0.35 * math.sin(facetPhase + i * math.pi)).clamp(0.1, 0.7);
+          _drawCompassStar(
+            canvas,
+            glintPos,
+            4,
+            4.2 * shrink,
+            1.2 * shrink,
+            const Color(0xFFA7F3D0).withOpacity(glintAlpha * shrink),
+            shrink,
+          );
+        }
+        break;
+
+      case BoardThemeType.oceanBreeze:
+        // 7. Ocean Breeze — Soft expanding water ripple on launch/aim
+        final double rippleProg = strikerGlowPhase;
+        final double rippleR = r * (0.30 + 0.55 * rippleProg);
+        final double rippleAlpha = ((1.0 - rippleProg) * 0.45).clamp(0.0, 1.0);
+        canvas.drawCircle(
+          pos,
+          rippleR,
+          Paint()
+            ..color = const Color(0xFF38BDF8).withOpacity(rippleAlpha * shrink)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.4 * shrink,
+        );
+        break;
+
+      case BoardThemeType.sakuraStudio:
+        // 8. Sakura Studio — Soft pink blossom petal drift
+        final Paint petalPaint = Paint()
+          ..color = const Color(0xFFFBCFE8).withOpacity(0.55 * shrink)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2);
+        for (int i = 0; i < 3; i++) {
+          final double petalAngle =
+              (strikerGlowPhase * 2 * math.pi) + (i * 2 * math.pi / 3);
+          final double petalDist = r * (0.38 + 0.20 * math.sin(petalAngle * 2));
+          final Offset petalPos = Offset(
+            pos.dx + petalDist * math.cos(petalAngle),
+            pos.dy + petalDist * math.sin(petalAngle),
+          );
+          canvas.drawCircle(petalPos, 2.0 * shrink, petalPaint);
+        }
+        break;
+
+      case BoardThemeType.neonArena:
+        // 9. Neon Arena — Glowing cyan ring & motion trail
+        final double neonPulse =
+            (0.40 + 0.35 * math.sin(strikerGlowPhase * math.pi * 3)).clamp(0.0, 1.0);
+        canvas.drawCircle(
+          pos,
+          r * 0.75,
+          Paint()
+            ..color = const Color(0xFF00F0FF).withOpacity(neonPulse * shrink)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0 * shrink
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+        );
+        break;
+
+      case BoardThemeType.goldenPalace:
+        // 10. Golden Palace — 4 cardinal golden sparkle stars
+        for (int i = 0; i < 4; i++) {
+          final double starAngle = i * (math.pi / 2);
+          final double sparklePhase =
+              strikerGlowPhase * math.pi * 2 + (i * math.pi / 2);
+          final double sparkleAlpha =
+              (0.25 + 0.45 * math.sin(sparklePhase)).clamp(0.0, 1.0);
+          final Offset starPos = Offset(
+            pos.dx + r * 0.80 * math.cos(starAngle),
+            pos.dy + r * 0.80 * math.sin(starAngle),
+          );
+          _drawCompassStar(
+            canvas,
+            starPos,
+            4,
+            3.8 * shrink,
+            1.0 * shrink,
+            const Color(0xFFFDE047).withOpacity(sparkleAlpha * shrink),
+            shrink,
+          );
+        }
+        break;
+
+      case BoardThemeType.cosmicElite:
+        // 11. Cosmic Elite — Violet starlight specks along orbital ring
+        final Paint starPaint = Paint()
+          ..color = const Color(0xFFDDD6FE).withOpacity(0.70 * shrink)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0);
+        for (int i = 0; i < 4; i++) {
+          final double orbitAngle =
+              (strikerGlowPhase * 2 * math.pi) + (i * math.pi / 2);
+          final Offset starPos = Offset(
+            pos.dx + r * 0.70 * math.cos(orbitAngle),
+            pos.dy + r * 0.45 * math.sin(orbitAngle),
+          );
+          canvas.drawCircle(starPos, 1.6 * shrink, starPaint);
+        }
+        break;
+    }
   }
 
   void _drawStrikerThemeTexture(

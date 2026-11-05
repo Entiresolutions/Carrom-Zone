@@ -73,12 +73,12 @@ void main() {
   });
 
   group('Freestyle Points Mode & Ludo Star-Style Turn Countdown Suite', () {
-    test('1. Freestyle scoring for White (10), Black (20), and either player pocketing any coin', () {
+    test('1. Freestyle scoring for White (20), Black (10), and either player pocketing any coin', () {
       final pieces = _createStandardPieces();
       final whiteCoin = pieces.firstWhere((p) => p.type == PieceType.white);
       final blackCoin = pieces.firstWhere((p) => p.type == PieceType.black);
 
-      // Player 1 (white) pockets a Black coin -> +20 to Player 1, continuesTurn: true
+      // Player 1 (white) pockets a Black coin -> +10 to Player 1, continuesTurn: true
       blackCoin.isPocketed = true;
       final evalP1Black = CarromTurnEvaluator.evaluate(
         result: TurnResult(
@@ -96,11 +96,11 @@ void main() {
         allPieces: pieces,
         ruleset: CarromRuleset.freestyle,
       );
-      expect(evalP1Black.whiteScore, equals(20));
+      expect(evalP1Black.whiteScore, equals(10));
       expect(evalP1Black.blackScore, equals(0));
       expect(evalP1Black.continuesTurn, isTrue);
 
-      // Player 2 (black) pockets both a White (10) and a Black (20) coin -> +30 to Player 2
+      // Player 2 (black) pockets both a White (20) and a Black (10) coin -> +30 to Player 2
       final secondBlack = pieces
           .where((p) => p.type == PieceType.black && !p.isPocketed)
           .first;
@@ -122,13 +122,140 @@ void main() {
         allPieces: pieces,
         ruleset: CarromRuleset.freestyle,
       );
-      expect(evalP2Multi.whiteScore, equals(20));
+      expect(evalP2Multi.whiteScore, equals(10));
       expect(evalP2Multi.blackScore, equals(30));
       expect(evalP2Multi.continuesTurn, isTrue);
     });
 
+    test('1b. Authoritative Freestyle scoring matrix: P1 White (+20), P1 Black (+10), CPU White (+20), CPU Black (+10), Same-shot (+30), Queen cover (+50)', () {
+      final pieces = _createStandardPieces();
+      final whiteCoin = pieces.firstWhere((p) => p.type == PieceType.white);
+      final blackCoin = pieces.firstWhere((p) => p.type == PieceType.black);
+
+      // Case 1: P1 pockets White -> P1 +20
+      final t1 = CarromTurnEvaluator.evaluate(
+        result: TurnResult(
+          pocketedOwn: true,
+          piecesPocketedThisTurn: [PieceType.white],
+          pocketedPieces: [whiteCoin],
+        ),
+        currentPlayer: PlayerColor.white,
+        whiteScore: 0,
+        blackScore: 0,
+        queenPocketed: false,
+        queenCovered: false,
+        queenPocketedBy: null,
+        needsCover: false,
+        allPieces: pieces,
+        ruleset: CarromRuleset.freestyle,
+      );
+      expect(t1.whiteScore, equals(20));
+      expect(t1.blackScore, equals(0));
+
+      // Case 2: P1 pockets Black -> P1 +10
+      final t2 = CarromTurnEvaluator.evaluate(
+        result: TurnResult(
+          pocketedOwn: true,
+          piecesPocketedThisTurn: [PieceType.black],
+          pocketedPieces: [blackCoin],
+        ),
+        currentPlayer: PlayerColor.white,
+        whiteScore: 0,
+        blackScore: 0,
+        queenPocketed: false,
+        queenCovered: false,
+        queenPocketedBy: null,
+        needsCover: false,
+        allPieces: pieces,
+        ruleset: CarromRuleset.freestyle,
+      );
+      expect(t2.whiteScore, equals(10));
+      expect(t2.blackScore, equals(0));
+
+      // Case 3: CPU (PlayerColor.black) pockets White -> CPU +20
+      final t3 = CarromTurnEvaluator.evaluate(
+        result: TurnResult(
+          pocketedOwn: true,
+          piecesPocketedThisTurn: [PieceType.white],
+          pocketedPieces: [whiteCoin],
+        ),
+        currentPlayer: PlayerColor.black,
+        whiteScore: 0,
+        blackScore: 0,
+        queenPocketed: false,
+        queenCovered: false,
+        queenPocketedBy: null,
+        needsCover: false,
+        allPieces: pieces,
+        ruleset: CarromRuleset.freestyle,
+      );
+      expect(t3.whiteScore, equals(0));
+      expect(t3.blackScore, equals(20));
+
+      // Case 4: CPU (PlayerColor.black) pockets Black -> CPU +10
+      final t4 = CarromTurnEvaluator.evaluate(
+        result: TurnResult(
+          pocketedOwn: true,
+          piecesPocketedThisTurn: [PieceType.black],
+          pocketedPieces: [blackCoin],
+        ),
+        currentPlayer: PlayerColor.black,
+        whiteScore: 0,
+        blackScore: 0,
+        queenPocketed: false,
+        queenCovered: false,
+        queenPocketedBy: null,
+        needsCover: false,
+        allPieces: pieces,
+        ruleset: CarromRuleset.freestyle,
+      );
+      expect(t4.whiteScore, equals(0));
+      expect(t4.blackScore, equals(10));
+
+      // Case 5: Same-shot White + Black -> Shooter +30
+      final t5 = CarromTurnEvaluator.evaluate(
+        result: TurnResult(
+          pocketedOwn: true,
+          piecesPocketedThisTurn: [PieceType.white, PieceType.black],
+          pocketedPieces: [whiteCoin, blackCoin],
+        ),
+        currentPlayer: PlayerColor.white,
+        whiteScore: 50,
+        blackScore: 40,
+        queenPocketed: false,
+        queenCovered: false,
+        queenPocketedBy: null,
+        needsCover: false,
+        allPieces: pieces,
+        ruleset: CarromRuleset.freestyle,
+      );
+      expect(t5.whiteScore, equals(80)); // 50 + 20 + 10 = 80
+      expect(t5.blackScore, equals(40));
+
+      // Case 6: Classic mode invariance - P1 pocketing Black is opponent coin
+      final t6Classic = CarromTurnEvaluator.evaluate(
+        result: TurnResult(
+          pocketedOpponent: true,
+          piecesPocketedThisTurn: [PieceType.black],
+          pocketedPieces: [blackCoin],
+        ),
+        currentPlayer: PlayerColor.white,
+        whiteScore: 2,
+        blackScore: 3,
+        queenPocketed: false,
+        queenCovered: false,
+        queenPocketedBy: null,
+        needsCover: false,
+        allPieces: pieces,
+        ruleset: CarromRuleset.classic,
+      );
+      expect(t6Classic.whiteScore, equals(2));
+      expect(t6Classic.blackScore, equals(4)); // Black credited for its own coin
+      expect(t6Classic.continuesTurn, isFalse);
+    });
+
     test('2. Freestyle same-shot and next-shot Queen cover (50 pts + cover coin pts)', () {
-      // Case A: Same-shot Queen + Black coin -> 50 + 20 = 70 points
+      // Case A: Same-shot Queen + Black coin -> 50 + 10 = 60 points
       final piecesSame = _createStandardPieces();
       final queenSame = piecesSame.firstWhere((p) => p.type == PieceType.queen)
         ..isPocketed = true;
@@ -155,10 +282,10 @@ void main() {
       expect(sameShotEval.queenCovered, isTrue);
       expect(sameShotEval.needsCover, isFalse);
       expect(sameShotEval.queenPocketedBy, equals(PlayerColor.white));
-      expect(sameShotEval.whiteScore, equals(80)); // 10 + 50 + 20
+      expect(sameShotEval.whiteScore, equals(70)); // 10 + 50 + 10
       expect(sameShotEval.continuesTurn, isTrue);
 
-      // Case B: Next-shot Queen cover with White coin -> 50 + 10 = 60 points
+      // Case B: Next-shot Queen cover with White coin -> 50 + 20 = 70 points
       final piecesNext = _createStandardPieces();
       final queenNext = piecesNext.firstWhere((p) => p.type == PieceType.queen)
         ..isPocketed = true;
@@ -185,7 +312,7 @@ void main() {
       expect(potQueenAlone.blackScore, equals(40)); // Not awarded until covered
       expect(potQueenAlone.continuesTurn, isTrue);
 
-      // Follow-up shot pockets a White coin (10 pts) to cover Queen (+50 pts)
+      // Follow-up shot pockets a White coin (20 pts) to cover Queen (+50 pts)
       final whiteCover = piecesNext.firstWhere((p) => p.type == PieceType.white)
         ..isPocketed = true;
       final coverShotEval = CarromTurnEvaluator.evaluate(
@@ -206,7 +333,7 @@ void main() {
       );
       expect(coverShotEval.queenCovered, isTrue);
       expect(coverShotEval.needsCover, isFalse);
-      expect(coverShotEval.blackScore, equals(100)); // 40 + 50 + 10
+      expect(coverShotEval.blackScore, equals(110)); // 40 + 50 + 20
       expect(coverShotEval.continuesTurn, isTrue);
     });
 
@@ -575,17 +702,25 @@ void main() {
       // Select FREESTYLE POINTS
       await tester.tap(find.text('FREESTYLE POINTS'));
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('FREESTYLE POINTS • 160 TARGET'), findsOneWidget);
+      expect(find.text('W:20 • B:10 • Q:50 • 160 Pts'), findsOneWidget);
 
-      // Launch VS CPU in Freestyle mode
+      // Launch VS CPU in Freestyle mode - difficulty selection dialog opens first
       await tester.tap(find.text('VS CPU'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('CHOOSE DIFFICULTY'), findsOneWidget);
+      expect(find.byType(Dialog), findsOneWidget);
+
+      // Confirm match start from dialog
+      await tester.tap(find.textContaining('START MATCH'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
 
       expect(find.byType(GameScreen), findsOneWidget);
       expect(find.text('You (P1)'), findsOneWidget);
       expect(find.text('CPU (P2)'), findsOneWidget);
-      expect(find.text('👑 Q:50 • W:10 • B:20'), findsOneWidget);
+      expect(find.text('Q:50 · W:20 · B:10'), findsOneWidget);
       expect(find.byType(ClubTurnTimerRing), findsWidgets);
 
       await tester.pumpWidget(const SizedBox());

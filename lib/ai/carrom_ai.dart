@@ -34,6 +34,8 @@ class _CandidateShot {
   final Vector2 pocket;
   final bool isBankShot;
   final double geometricScore;
+  final double cutCosTheta;
+  final double totalDistance;
 
   _CandidateShot({
     required this.strikerX,
@@ -43,6 +45,8 @@ class _CandidateShot {
     required this.pocket,
     this.isBankShot = false,
     required this.geometricScore,
+    this.cutCosTheta = 1.0,
+    this.totalDistance = 200.0,
   });
 }
 
@@ -95,34 +99,34 @@ class AiDifficultyConfig {
 
   static const AiDifficultyConfig easy = AiDifficultyConfig(
     maxSimulations: 2,
-    minCosTheta: 0.45, // Discard steep cuts > 63.2 deg (simple direct pots only)
+    minCosTheta: 0.52, // Discard steep cuts > 58.7 deg (simple direct pots only)
     allowBankShots: false, // Disallow complex trick shots
     allowDefense: false, // Beginner-friendly non-aggressive mindset
-    angleJitterSpread: 0.114, // ~6.53 deg spread (natural novice variance)
-    powerMinRatio: 0.82,
-    powerMaxRatio: 1.12,
-    secondBestShotChance: 0.35, // 35% chance to pick 2nd best viable shot
+    angleJitterSpread: 0.175, // ~10.0 deg base spread (natural novice variance)
+    powerMinRatio: 0.80,
+    powerMaxRatio: 1.20,
+    secondBestShotChance: 0.45, // 45% chance to pick 2nd best viable shot
     minClampedPower: 0.30,
   );
 
   static const AiDifficultyConfig medium = AiDifficultyConfig(
-    maxSimulations: 4,
-    minCosTheta: 0.28, // Moderate cuts <= 73.7 deg
-    allowBankShots: true, // 1-wall bank if direct candidates < 3
-    allowDefense: true, // Moderate tactical denial
-    angleJitterSpread: 0.032, // ~1.83 deg spread
-    powerMinRatio: 0.94,
-    powerMaxRatio: 1.06,
-    secondBestShotChance: 0.10, // 10% chance to pick 2nd best viable shot
+    maxSimulations: 3, // Balanced candidate budget (2–3 instead of 4)
+    minCosTheta: 0.38, // Moderate cuts <= 67.7 deg (prevents razor-thin 73+ deg cuts)
+    allowBankShots: false, // Straightforward achievable shots (no trick cushion banks)
+    allowDefense: false, // Non-punitive casual play (no snooker pocket denial)
+    angleJitterSpread: 0.082, // ~4.7 deg base spread, tuned by shot difficulty
+    powerMinRatio: 0.90, // +-10% power variation
+    powerMaxRatio: 1.10,
+    secondBestShotChance: 0.35, // 35% chance to pick 2nd viable candidate
     minClampedPower: 0.35,
   );
 
   static const AiDifficultyConfig hard = AiDifficultyConfig(
-    maxSimulations: 6,
-    minCosTheta: 0.15, // Master thin cuts up to 81.3 deg
+    maxSimulations: 5,
+    minCosTheta: 0.16, // Master thin cuts up to 80.8 deg
     allowBankShots: true, // Full cushion bank search
     allowDefense: true, // Aggressive tactical pocket denial
-    angleJitterSpread: 0.010, // ~0.57 deg spread (tournament sharp)
+    angleJitterSpread: 0.015, // ~0.86 deg spread (tournament sharp)
     powerMinRatio: 0.98,
     powerMaxRatio: 1.02,
     secondBestShotChance: 0.0, // Always selects top simulated candidate
@@ -191,9 +195,13 @@ class CarromAI {
             !p.isPocketed)
         .toList()
       ..sort((a, b) {
-        // Prioritize 20-pt Black coins ahead of 10-pt White coins in Freestyle
-        final int aVal = a.type == PieceType.black ? 20 : 10;
-        final int bVal = b.type == PieceType.black ? 20 : 10;
+        // Prioritize 20-pt White coins ahead of 10-pt Black coins in Freestyle
+        final int aVal = a.type == PieceType.white
+            ? GameConfig.freestyleWhitePoints
+            : GameConfig.freestyleBlackPoints;
+        final int bVal = b.type == PieceType.white
+            ? GameConfig.freestyleWhitePoints
+            : GameConfig.freestyleBlackPoints;
         return bVal.compareTo(aVal);
       });
     final queen = pieces.firstWhere(
@@ -238,8 +246,17 @@ class CarromAI {
             // Endgame safeguard: Pocket Queen before the last normal coin
             candidateTargets.insert(0, queen);
             candidateTargets.addAll(normalPieces);
-          } else {
+          } else if (difficulty == AiDifficulty.hard) {
             candidateTargets.add(queen);
+            candidateTargets.addAll(normalPieces);
+          } else if (difficulty == AiDifficulty.medium) {
+            // Medium: Prioritize normal coins, contest Queen when 4 or fewer remain
+            if (normalPieces.length <= 4) {
+              candidateTargets.add(queen);
+            }
+            candidateTargets.addAll(normalPieces);
+          } else {
+            // Easy: Focus on normal coins, avoid aggressive Queen hunting
             candidateTargets.addAll(normalPieces);
           }
         } else {
@@ -257,14 +274,20 @@ class CarromAI {
           // to prevent premature win foul/respot
           candidateTargets.insert(0, queen);
           candidateTargets.addAll(myPieces);
-        } else if (myPieces.length <= 4) {
-          // Mid-game: Actively contest Queen (+3 pts)
+        } else if (difficulty == AiDifficulty.hard && myPieces.length <= 4) {
+          // Hard: Actively contest Queen from mid-game (+3 pts)
+          candidateTargets.add(queen);
+          candidateTargets.addAll(myPieces);
+        } else if (difficulty == AiDifficulty.medium && myPieces.length <= 2) {
+          // Medium: Focus own coins first; contest Queen only when 2 pieces remain
           candidateTargets.add(queen);
           candidateTargets.addAll(myPieces);
         } else {
-          // Early game: Open own pieces first, then Queen
+          // Early/mid game on Easy/Medium: Open own pieces first
           candidateTargets.addAll(myPieces);
-          candidateTargets.add(queen);
+          if (difficulty == AiDifficulty.hard) {
+            candidateTargets.add(queen);
+          }
         }
       } else {
         candidateTargets.addAll(myPieces);
@@ -747,7 +770,17 @@ class CarromAI {
       }
     }
 
-    final double jitter = (_random.nextDouble() - 0.5) * config.angleJitterSpread;
+    // Dynamic Shot-Difficulty Jitter Scaling:
+    // Straight & close shots retain high natural consistency.
+    // Long-distance & thin-cut shots scale up angular and power variance realistically.
+    final double cutFactor = math.max(0.0, 1.0 - chosen.candidate.cutCosTheta);
+    final double distFactor = math.max(0.0, (chosen.candidate.totalDistance - 100.0) / 200.0);
+    final double maxScale = difficulty == AiDifficulty.hard ? 1.25 : 2.0;
+    final double difficultyScale = (1.0 + (cutFactor * 1.2) + (distFactor * 0.8)).clamp(1.0, maxScale);
+
+    final double effectiveSpread = config.angleJitterSpread * difficultyScale;
+    final double jitter = (_random.nextDouble() - 0.5) * effectiveSpread;
+
     final double powerRange = config.powerMaxRatio - config.powerMinRatio;
     final double powerMod = config.powerMinRatio + _random.nextDouble() * powerRange;
 
@@ -802,12 +835,21 @@ class CarromAI {
     score -= distToPocket * 0.20;
     score += cosTheta * 50.0;
 
+    // On Easy and Medium, prefer straightforward, achievable shots over expert-level precision cuts
+    if (difficulty == AiDifficulty.easy) {
+      score -= (1.0 - cosTheta) * 50.0;
+      score -= distToHit * 0.15;
+    } else if (difficulty == AiDifficulty.medium) {
+      score -= (1.0 - cosTheta) * 30.0;
+      score -= distToHit * 0.08;
+    }
+
     if (ruleset == CarromRuleset.freestyle) {
       if (target.type == PieceType.queen) {
         score += 32.0;
-      } else if (target.type == PieceType.black) {
-        score += 18.0;
       } else if (target.type == PieceType.white) {
+        score += 18.0;
+      } else if (target.type == PieceType.black) {
         score += 8.0;
       }
     } else if (target.type == PieceType.queen) {
@@ -822,6 +864,8 @@ class CarromAI {
       pocket: pocket,
       isBankShot: false,
       geometricScore: score,
+      cutCosTheta: cosTheta,
+      totalDistance: distToHit + distToPocket,
     );
   }
 
@@ -898,9 +942,9 @@ class CarromAI {
     if (ruleset == CarromRuleset.freestyle) {
       if (target.type == PieceType.queen) {
         score += 24.0;
-      } else if (target.type == PieceType.black) {
-        score += 14.0;
       } else if (target.type == PieceType.white) {
+        score += 14.0;
+      } else if (target.type == PieceType.black) {
         score += 6.0;
       }
     }
@@ -913,6 +957,8 @@ class CarromAI {
       pocket: pocket,
       isBankShot: true,
       geometricScore: score,
+      cutCosTheta: cosTheta,
+      totalDistance: distToHitTotal + distToPocket,
     );
   }
 

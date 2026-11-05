@@ -34,7 +34,7 @@ class _MenuScreenState extends State<MenuScreen> {
     _currentDifficulty = StorageService().getAiDifficulty();
   }
 
-  void _startGame(GameMode mode) {
+  void _startGame(GameMode mode, {AiDifficulty? difficulty}) {
     AudioService().hapticSelection();
     final bool reducedMotion = ClubMotion.isReducedMotion(context);
     final CarromRuleset effectiveRuleset =
@@ -45,6 +45,7 @@ class _MenuScreenState extends State<MenuScreen> {
         page: GameScreen(
           gameMode: mode,
           ruleset: effectiveRuleset,
+          difficulty: difficulty ?? _currentDifficulty,
         ),
         reducedMotion: reducedMotion,
       ),
@@ -54,6 +55,29 @@ class _MenuScreenState extends State<MenuScreen> {
         setState(_loadPreferences);
       }
     });
+  }
+
+  void _onVsCpuTap() {
+    AudioService().hapticSelection();
+    _showDifficultyDialog();
+  }
+
+  void _showDifficultyDialog() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => _DifficultySelectionDialog(
+        currentDifficulty: _currentDifficulty,
+        ruleset: _selectedRuleset,
+        onDifficultyChosen: (chosenDiff) {
+          StorageService().setAiDifficulty(chosenDiff);
+          setState(() {
+            _currentDifficulty = chosenDiff;
+          });
+          _startGame(GameMode.vsCpu, difficulty: chosenDiff);
+        },
+      ),
+    );
   }
 
   void _openTutorial() {
@@ -142,39 +166,21 @@ class _MenuScreenState extends State<MenuScreen> {
                                 _ModeActionCard(
                                   customIcon: ClubIconType.vsCpu,
                                   title: 'VS CPU',
-                                  subtitle: _selectedRuleset ==
-                                          CarromRuleset.freestyle
-                                      ? 'Race CPU to 160 pts • Any coin counts'
-                                      : 'Test your tactical skills against AI',
-                                  categoryTag: _selectedRuleset ==
-                                          CarromRuleset.freestyle
-                                      ? 'FREESTYLE POINTS • 160 TARGET'
-                                      : 'SOLO PLAY • TACTICAL AI',
                                   difficultyTag: _currentDifficulty.name.toUpperCase(),
                                   variant: _ModeCardVariant.goldPrimary,
-                                  onTap: () => _startGame(GameMode.vsCpu),
+                                  onTap: _onVsCpuTap,
                                 ),
-                                const SizedBox(height: 11),
+                                const SizedBox(height: 10),
                                 _ModeActionCard(
                                   customIcon: ClubIconType.passAndPlay,
                                   title: 'PASS & PLAY',
-                                  subtitle: _selectedRuleset ==
-                                          CarromRuleset.freestyle
-                                      ? '2-Player Freestyle race to 160 pts'
-                                      : 'Turn-based tabletop match on 1 device',
-                                  categoryTag: _selectedRuleset ==
-                                          CarromRuleset.freestyle
-                                      ? 'LOCAL 2P • FREESTYLE 10/20/50'
-                                      : 'LOCAL MULTIPLAYER • 2 PLAYERS',
                                   variant: _ModeCardVariant.navyPrimary,
                                   onTap: () => _startGame(GameMode.passAndPlay),
                                 ),
-                                const SizedBox(height: 11),
+                                const SizedBox(height: 10),
                                 _ModeActionCard(
                                   customIcon: ClubIconType.practice,
                                   title: 'PRACTICE ARENA',
-                                  subtitle: 'Freestyle board to master angles & tricks',
-                                  categoryTag: 'SOLO MASTERY • UNTIMED',
                                   variant: _ModeCardVariant.walnutPrimary,
                                   onTap: () => _startGame(GameMode.practice),
                                 ),
@@ -219,33 +225,17 @@ class _MenuScreenState extends State<MenuScreen> {
         ),
         const SizedBox(width: 12),
 
-        // Brand Title & Tagline Lockup
+        // Brand Title Lockup
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'CARROM ZONE',
-                style: GoogleFonts.cinzel(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 2.0,
-                  color: AppColors.textPrimary,
-                  height: 1.1,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'CHAMPIONSHIP CLUB EDITION',
-                style: GoogleFonts.outfit(
-                  fontSize: 9.0,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.3,
-                  color: AppColors.goldLight,
-                ),
-              ),
-            ],
+          child: Text(
+            'CARROM ZONE',
+            style: GoogleFonts.cinzel(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 2.0,
+              color: AppColors.textPrimary,
+              height: 1.1,
+            ),
           ),
         ),
 
@@ -270,93 +260,43 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Widget _buildHeroBrandHeadline() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Micro Badge Pill
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.cardBgElevated,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.gold.withOpacity(0.40),
-              width: 1.0,
+    return RichText(
+      text: TextSpan(
+        children: [
+          TextSpan(
+            text: 'Play Carrom\n',
+            style: GoogleFonts.outfit(
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.6,
+              color: AppColors.textPrimary,
+              height: 1.08,
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const ClubIcon(
-                type: ClubIconType.queen,
-                size: 13,
-                color: AppColors.goldLight,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'POINTS-BASED CLUB PLAY',
-                style: GoogleFonts.outfit(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                  color: AppColors.goldLight,
-                ),
-              ),
-            ],
+          TextSpan(
+            text: 'Your Way',
+            style: GoogleFonts.outfit(
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.6,
+              color: AppColors.goldLight,
+              height: 1.08,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-
-        // Hero Title with Controlled Typography Hierarchy
-        RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: 'Play Carrom\n',
-                style: GoogleFonts.outfit(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.6,
-                  color: AppColors.textPrimary,
-                  height: 1.08,
-                ),
-              ),
-              TextSpan(
-                text: 'Your Way',
-                style: GoogleFonts.outfit(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.6,
-                  color: AppColors.goldLight,
-                  height: 1.08,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Realistic tabletop physics, tactile strikes & championship play',
-          style: GoogleFonts.outfit(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildThemePreviewCard() {
     final bool isFree = ThemeService().isThemeFree(_currentTheme);
     final String themeName = AppColors.getThemeName(_currentTheme);
-    final String themeSubtitle = AppColors.getThemeSubtitle(_currentTheme);
 
     return _PressableCard(
       onTap: _openThemeCollection,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(16),
@@ -383,108 +323,79 @@ class _MenuScreenState extends State<MenuScreen> {
             // Exact Miniature In-Game Board Preview
             ThemeBoardPreview(
               theme: _currentTheme,
-              size: 52,
-              borderRadius: BorderRadius.circular(12),
+              size: 46,
+              borderRadius: BorderRadius.circular(10),
             ),
             const SizedBox(width: 12),
 
-            // Metadata: Overline, Theme Name & Subtitle
+            // Theme Name & Status Badge
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'TABLE THEME',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.outfit(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.0,
-                            color: AppColors.goldLight,
-                          ),
-                        ),
+                  Flexible(
+                    child: Text(
+                      themeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
                       ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isFree
-                              ? const Color(0xFFEAF5EE)
-                              : const Color(0xFFFFF9E6),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isFree
-                                ? const Color(0xFF9FD4B3)
-                                : const Color(0xFFE5C370),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 4.5,
-                              height: 4.5,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isFree
-                                    ? const Color(0xFF1B6A45)
-                                    : const Color(0xFF8B6415),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              isFree ? 'FREE' : 'PREMIUM',
-                              style: GoogleFonts.outfit(
-                                fontSize: 8.5,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
-                                color: isFree
-                                    ? const Color(0xFF1B6A45)
-                                    : const Color(0xFF784F07),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    themeName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.outfit(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 1),
-                  Text(
-                    '$themeSubtitle • 11 Championship Boards',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textSecondary,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isFree
+                          ? const Color(0xFFEAF5EE)
+                          : const Color(0xFFFFF9E6),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isFree
+                            ? const Color(0xFF9FD4B3)
+                            : const Color(0xFFE5C370),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 4.5,
+                          height: 4.5,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isFree
+                                ? const Color(0xFF1B6A45)
+                                : const Color(0xFF8B6415),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          isFree ? 'FREE' : 'PREMIUM',
+                          style: GoogleFonts.outfit(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                            color: isFree
+                                ? const Color(0xFF1B6A45)
+                                : const Color(0xFF784F07),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
 
-            // Refined Action Affordance Pill
+            // Action Affordance Pill
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5.5),
               decoration: BoxDecoration(
@@ -560,7 +471,7 @@ class _MenuScreenState extends State<MenuScreen> {
           Expanded(
             child: _rulesetOptionPill(
               title: 'FREESTYLE POINTS',
-              subtitle: 'W:10 • B:20 • Q:50 • 160 Pts',
+              subtitle: 'W:20 • B:10 • Q:50 • 160 Pts',
               selected: !isClassic,
               onTap: () {
                 if (isClassic) {
@@ -639,12 +550,16 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Widget _buildBottomNavigationDock() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
       decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFFFFDF9), Color(0xFFF7F1E7)],
+        ),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: AppColors.cardBorder,
+          color: const Color(0xFFE2D6C3),
           width: 1.2,
         ),
         boxShadow: const [
@@ -654,8 +569,8 @@ class _MenuScreenState extends State<MenuScreen> {
             offset: Offset(0, 5),
           ),
           BoxShadow(
-            color: Color(0x40FFFFFF),
-            blurRadius: 1.5,
+            color: Color(0xA0FFFFFF),
+            blurRadius: 2,
             offset: Offset(0, -1),
           ),
         ],
@@ -669,7 +584,7 @@ class _MenuScreenState extends State<MenuScreen> {
           ),
           _dockDivider(),
           _DockNavButton(
-            customIcon: ClubIconType.school,
+            customIcon: ClubIconType.themes,
             label: 'THEMES',
             onTap: _openThemeCollection,
           ),
@@ -687,9 +602,9 @@ class _MenuScreenState extends State<MenuScreen> {
   Widget _dockDivider() {
     return Container(
       width: 1,
-      height: 30,
+      height: 32,
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: AppColors.cardBorderSubtle,
+      color: const Color(0x28D4C4AC),
     );
   }
 }
@@ -703,8 +618,6 @@ enum _ModeCardVariant {
 class _ModeActionCard extends StatefulWidget {
   final ClubIconType customIcon;
   final String title;
-  final String subtitle;
-  final String categoryTag;
   final String? difficultyTag;
   final _ModeCardVariant variant;
   final VoidCallback onTap;
@@ -712,8 +625,6 @@ class _ModeActionCard extends StatefulWidget {
   const _ModeActionCard({
     required this.customIcon,
     required this.title,
-    required this.subtitle,
-    required this.categoryTag,
     this.difficultyTag,
     required this.variant,
     required this.onTap,
@@ -798,21 +709,22 @@ class _ModeActionCardState extends State<_ModeActionCard> {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Handcrafted Squircle Badge
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(14),
                     gradient: badgeGradient,
                     boxShadow: [
                       BoxShadow(
-                        color: accentColor.withOpacity(0.25),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                        color: accentColor.withOpacity(0.22),
+                        blurRadius: 7,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
@@ -820,89 +732,59 @@ class _ModeActionCardState extends State<_ModeActionCard> {
                     child: ClubIcon(
                       type: widget.customIcon,
                       color: badgeIconColor,
-                      size: 26,
+                      size: 24,
                     ),
                   ),
                 ),
                 const SizedBox(width: 14),
 
-                // Title, Subtitle & Micro Category
+                // Title & Difficulty Tag
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              widget.categoryTag,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.outfit(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.0,
-                                color: accentColor,
-                              ),
+                      Flexible(
+                        child: Text(
+                          widget.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.4,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (widget.difficultyTag != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF7E6),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: const Color(0xFFE5C370),
+                              width: 0.8,
                             ),
                           ),
-                          if (widget.difficultyTag != null) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 1.5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF7E6),
-                                borderRadius: BorderRadius.circular(5),
-                                border: Border.all(
-                                  color: const Color(0xFFE5C370),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                widget.difficultyTag!,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.4,
-                                  color: const Color(0xFF784F07),
-                                ),
-                              ),
+                          child: Text(
+                            widget.difficultyTag!,
+                            style: GoogleFonts.outfit(
+                              fontSize: 9.0,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.4,
+                              color: const Color(0xFF784F07),
                             ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(
-                          fontSize: 17.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
-                          color: AppColors.textPrimary,
-                          height: 1.15,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
 
                 // Trailing Action Trigger
                 Container(
@@ -972,41 +854,70 @@ class _DockNavButtonState extends State<_DockNavButton> {
         onTapCancel: () => setState(() => _pressed = false),
         behavior: HitTestBehavior.opaque,
         child: AnimatedScale(
-          scale: (_pressed && !reducedMotion) ? 0.94 : 1.0,
+          scale: (_pressed && !reducedMotion) ? 0.93 : 1.0,
           duration: const Duration(milliseconds: 80),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
+            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
+                // Luxury Ivory-Satin Button Container with Soft Depth
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 90),
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: AppColors.cardBgElevated,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.cardBorderSubtle,
-                      width: 1.0,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: _pressed
+                          ? const [Color(0xFFFFF9EE), Color(0xFFF7EACD)]
+                          : const [Color(0xFFFFFFFF), Color(0xFFF2EADC)],
                     ),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                      color: _pressed
+                          ? const Color(0xFFD4AF37)
+                          : const Color(0xFFDDD2C0),
+                      width: _pressed ? 1.5 : 1.1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _pressed
+                            ? const Color(0x35D4AF37)
+                            : const Color(0x1014243B),
+                        blurRadius: _pressed ? 10 : 5,
+                        offset: const Offset(0, 2),
+                      ),
+                      const BoxShadow(
+                        color: Color(0x90FFFFFF),
+                        blurRadius: 1.5,
+                        offset: Offset(0, -1),
+                      ),
+                    ],
                   ),
                   child: Center(
                     child: ClubIcon(
                       type: widget.customIcon,
-                      color: AppColors.goldLight,
-                      size: 20,
+                      size: 24,
+                      color: _pressed
+                          ? const Color(0xFF8B6415)
+                          : const Color(0xFF14243B),
                     ),
                   ),
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 6),
                 Text(
                   widget.label,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
                     fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     letterSpacing: 0.8,
-                    color: AppColors.textPrimary,
+                    color: _pressed
+                        ? const Color(0xFF8B6415)
+                        : const Color(0xFF14243B),
                   ),
                 ),
               ],
@@ -1051,6 +962,321 @@ class _PressableCardState extends State<_PressableCard> {
         scale: (_pressed && !reducedMotion) ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 90),
         child: widget.child,
+      ),
+    );
+  }
+}
+
+class _DifficultySelectionDialog extends StatefulWidget {
+  final AiDifficulty currentDifficulty;
+  final CarromRuleset ruleset;
+  final ValueChanged<AiDifficulty> onDifficultyChosen;
+
+  const _DifficultySelectionDialog({
+    required this.currentDifficulty,
+    required this.ruleset,
+    required this.onDifficultyChosen,
+  });
+
+  @override
+  State<_DifficultySelectionDialog> createState() =>
+      _DifficultySelectionDialogState();
+}
+
+class _DifficultySelectionDialogState
+    extends State<_DifficultySelectionDialog> {
+  late AiDifficulty _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.currentDifficulty;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isFreestyle = widget.ruleset == CarromRuleset.freestyle;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 390),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: AppColors.gold.withOpacity(0.65),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 28,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top Row: Header Icon, Title & Close Button
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.gold.withOpacity(0.40),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: const Center(
+                    child: ClubIcon(
+                      type: ClubIconType.vsCpu,
+                      size: 24,
+                      color: AppColors.goldDark,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'CHOOSE DIFFICULTY',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ivory,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isFreestyle
+                            ? 'Freestyle Points • Race to 160'
+                            : 'Classic Carrom • Casual Points',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          color: AppColors.woodLight,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () {
+                    AudioService().hapticSelection();
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  color: AppColors.woodLight,
+                  splashRadius: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: AppColors.cardBorder, height: 1),
+            const SizedBox(height: 14),
+
+            // Difficulty Cards (Easy, Medium, Hard)
+            _difficultyOptionCard(
+              difficulty: AiDifficulty.easy,
+              title: 'EASY',
+              tierLabel: 'NOVICE',
+              tagColor: const Color(0xFF22C55E),
+              description: 'Simple direct shots • Relaxed play • Beatable',
+              statLabel: 'Direct pots only • Cushion banks disabled',
+            ),
+            const SizedBox(height: 10),
+            _difficultyOptionCard(
+              difficulty: AiDifficulty.medium,
+              title: 'MEDIUM',
+              tierLabel: 'CLUB PLAYER',
+              tagColor: const Color(0xFFEAB308),
+              description: 'Balanced accuracy • Moderate challenge',
+              statLabel: 'Standard cuts • Limited cushion bank shots',
+            ),
+            const SizedBox(height: 10),
+            _difficultyOptionCard(
+              difficulty: AiDifficulty.hard,
+              title: 'HARD',
+              tierLabel: 'TOURNAMENT PRO',
+              tagColor: const Color(0xFFEF4444),
+              description: 'Tournament sharpness • Pro tactical defense',
+              statLabel: 'Thin cut angles • Full cushion bank repertoire',
+            ),
+
+            const SizedBox(height: 18),
+
+            // Start Match Button
+            ElevatedButton(
+              onPressed: () {
+                AudioService().hapticSelection();
+                Navigator.of(context).pop();
+                widget.onDifficultyChosen(_selected);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: AppColors.bgDark,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 2,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.play_arrow_rounded, size: 20),
+                  const SizedBox(width: 6),
+                  Text(
+                    'START MATCH (${_selected.name.toUpperCase()})',
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _difficultyOptionCard({
+    required AiDifficulty difficulty,
+    required String title,
+    required String tierLabel,
+    required Color tagColor,
+    required String description,
+    required String statLabel,
+  }) {
+    final bool isSelected = _selected == difficulty;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          AudioService().hapticSelection();
+          setState(() => _selected = difficulty);
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.cardBgElevated : AppColors.cardBgLight,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? AppColors.gold : AppColors.cardBorder,
+              width: isSelected ? 1.8 : 1.0,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.gold.withOpacity(0.18),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Radio indicator
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.goldDark
+                        : AppColors.woodLight.withOpacity(0.5),
+                    width: isSelected ? 5.5 : 1.8,
+                  ),
+                  color: isSelected ? AppColors.goldLight : Colors.transparent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          title,
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected ? AppColors.goldDark : AppColors.ivory,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6.5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: tagColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: tagColor.withOpacity(0.35),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            tierLabel,
+                            style: GoogleFonts.outfit(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: tagColor,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: GoogleFonts.outfit(
+                        fontSize: 11.5,
+                        color: AppColors.ivory.withOpacity(0.85),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      statLabel,
+                      style: GoogleFonts.outfit(
+                        fontSize: 10,
+                        color: AppColors.woodLight,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

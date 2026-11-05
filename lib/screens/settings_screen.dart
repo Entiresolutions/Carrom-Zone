@@ -177,6 +177,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Turn Continuation',
                   'Pocketing at least one of your own pieces without fouling grants another consecutive shot.',
                 ),
+                const SizedBox(height: 10),
+                _ruleItem(
+                  'Freestyle Mode (160 Pts)',
+                  'Both players can pocket either color! White = +20 pts, Black = +10 pts, Queen = +50 pts (after legal cover). First to 160 pts wins!',
+                ),
                 const SizedBox(height: 18),
                 SizedBox(
                   width: double.infinity,

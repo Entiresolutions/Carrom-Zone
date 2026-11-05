@@ -76,6 +76,14 @@ class _TutorialDialogState extends State<TutorialDialog> {
       'badge': 'STEP 6 • MATCH VICTORY',
       'accent': AppColors.goldBright,
     },
+    {
+      'customIcon': ClubIconType.rules,
+      'title': 'Freestyle Points Mode',
+      'desc':
+          'In Freestyle Mode, both players can pocket either color! White coins award +20 pts, Black coins award +10 pts, and the Red Queen awards +50 pts (after cover). First to reach 160 points wins!',
+      'badge': 'STEP 7 • FREESTYLE POINTS',
+      'accent': AppColors.tealLight,
+    },
   ];
 
   @override

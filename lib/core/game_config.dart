@@ -24,8 +24,8 @@ class GameConfig {
   static const double strikerMass = 2.8;
 
   // Freestyle Points Mode configuration
-  static const int freestyleWhitePoints = 10;
-  static const int freestyleBlackPoints = 20;
+  static const int freestyleWhitePoints = 20;
+  static const int freestyleBlackPoints = 10;
   static const int freestyleQueenPoints = 50;
   static const int freestyleFoulPenalty = 10;
   static const int freestyleTargetScore = 160;

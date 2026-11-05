@@ -666,16 +666,16 @@ class CarromTurnEvaluator {
       // Apply configurable point penalty (default -10, floored at 0)
       deductScore(currentPlayer, foulPenalty);
 
-      // Return 1 previously pocketed normal coin (preferring 10-pt White coin) to board if available
+      // Return 1 previously pocketed normal coin (preferring 10-pt Black coin, then 20-pt White coin) to board if available
       final PieceModel previouslyPocketed = allPieces.firstWhere(
         (p) =>
-            p.type == PieceType.white &&
+            p.type == PieceType.black &&
             p.isPocketed &&
             !result.pocketedPieces.contains(p) &&
             !piecesToRespot.contains(p),
         orElse: () => allPieces.firstWhere(
           (p) =>
-              p.type == PieceType.black &&
+              p.type == PieceType.white &&
               p.isPocketed &&
               !result.pocketedPieces.contains(p) &&
               !piecesToRespot.contains(p),
@@ -796,7 +796,7 @@ class CarromTurnEvaluator {
       );
     }
 
-    // --- 4. NORMAL COINS SHOT (White = 10 pts, Black = 20 pts) ---
+    // --- 4. NORMAL COINS SHOT (White = 20 pts, Black = 10 pts) ---
     if (normalPocketedCount > 0) {
       final int normalRemaining = countNormalRemainingOnBoard();
       final bool hasUncoveredQueen = !newQueenCovered &&

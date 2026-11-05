@@ -279,6 +279,60 @@ class AppColors {
     }
   }
 
+  static String getThemeAssetKey(BoardThemeType theme) {
+    switch (theme) {
+      case BoardThemeType.mahogany:
+        return 'mahogany';
+      case BoardThemeType.emerald:
+        return 'emerald';
+      case BoardThemeType.midnight:
+        return 'midnight';
+      case BoardThemeType.walnutClub:
+        return 'walnut_club';
+      case BoardThemeType.royalIndigo:
+        return 'royal_indigo';
+      case BoardThemeType.emeraldLounge:
+        return 'emerald_lounge';
+      case BoardThemeType.oceanBreeze:
+        return 'ocean_breeze';
+      case BoardThemeType.sakuraStudio:
+        return 'sakura_studio';
+      case BoardThemeType.neonArena:
+        return 'neon_arena';
+      case BoardThemeType.goldenPalace:
+        return 'golden_palace';
+      case BoardThemeType.cosmicElite:
+        return 'cosmic_elite';
+    }
+  }
+
+  static String getStrikerAsset(BoardThemeType theme) {
+    switch (theme) {
+      case BoardThemeType.mahogany:
+        return 'assets/images/strikers/striker_mahogany.png';
+      case BoardThemeType.emerald:
+        return 'assets/images/strikers/striker_emerald.png';
+      case BoardThemeType.midnight:
+        return 'assets/images/strikers/striker_midnight.png';
+      case BoardThemeType.walnutClub:
+        return 'assets/images/strikers/striker_walnut_club.png';
+      case BoardThemeType.royalIndigo:
+        return 'assets/images/strikers/striker_royal_indigo.png';
+      case BoardThemeType.emeraldLounge:
+        return 'assets/images/strikers/striker_emerald_lounge.png';
+      case BoardThemeType.oceanBreeze:
+        return 'assets/images/strikers/striker_ocean_breeze.png';
+      case BoardThemeType.sakuraStudio:
+        return 'assets/images/strikers/striker_sakura_studio.png';
+      case BoardThemeType.neonArena:
+        return 'assets/images/strikers/striker_neon_arena.png';
+      case BoardThemeType.goldenPalace:
+        return 'assets/images/strikers/striker_golden_palace.png';
+      case BoardThemeType.cosmicElite:
+        return 'assets/images/strikers/striker_cosmic_elite.png';
+    }
+  }
+
   static Color getThemeAccent(BoardThemeType theme) {
     switch (theme) {
       case BoardThemeType.mahogany:

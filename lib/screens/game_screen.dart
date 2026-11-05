@@ -22,8 +22,12 @@ import '../painters/piece_painter.dart';
 import '../painters/aim_painter.dart';
 import '../painters/particle_painter.dart';
 import '../services/audio_service.dart';
+import '../services/piece_asset_service.dart';
 import '../services/storage_service.dart';
+import '../services/striker_asset_service.dart';
 import 'game_over_dialog.dart';
+import 'settings_screen.dart';
+import 'theme_collection_screen.dart';
 import 'tutorial_dialog.dart';
 
 class GameScreen extends StatefulWidget {
@@ -31,6 +35,7 @@ class GameScreen extends StatefulWidget {
   final CarromRuleset ruleset;
   final int targetScore;
   final double turnDurationSeconds;
+  final AiDifficulty? difficulty;
 
   const GameScreen({
     super.key,
@@ -38,6 +43,7 @@ class GameScreen extends StatefulWidget {
     this.ruleset = CarromRuleset.classic,
     this.targetScore = GameConfig.freestyleTargetScore,
     this.turnDurationSeconds = GameConfig.defaultTurnDurationSeconds,
+    this.difficulty,
   });
 
   @override
@@ -46,7 +52,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  late Ticker _gameLoopTicker;
+  Ticker? _gameLoopTicker;
   late AnimationController _glowController;
   Duration? _lastElapsed;
 
@@ -68,6 +74,7 @@ class _GameScreenState extends State<GameScreen>
   Timer? _cpuThinkingTimer;
   Timer? _cpuAimTimer;
   AnimationController? _cpuAnimController;
+  VoidCallback? _cpuAnimTickListener;
   Timer? _toastTimer;
   bool _isPauseDialogShowing = false;
   bool _isGameOverDialogShowing = false;
@@ -110,12 +117,69 @@ class _GameScreenState extends State<GameScreen>
 
   final math.Random _random = math.Random();
 
+  // Testing inspection hooks
+  @visibleForTesting
+  GameStateMachine get stateMachine => _stateMachine;
+  @visibleForTesting
+  TurnTimerController get turnTimer => _turnTimer;
+  @visibleForTesting
+  List<PieceModel> get pieces => _pieces;
+  @visibleForTesting
+  PlayerColor get currentPlayer => _currentPlayer;
+  @visibleForTesting
+  set currentPlayer(PlayerColor p) => _currentPlayer = p;
+  @visibleForTesting
+  int get whiteScore => _whiteScore;
+  @visibleForTesting
+  set whiteScore(int s) => _whiteScore = s;
+  @visibleForTesting
+  int get blackScore => _blackScore;
+  @visibleForTesting
+  set blackScore(int s) => _blackScore = s;
+  @visibleForTesting
+  bool get queenPocketed => _queenPocketed;
+  @visibleForTesting
+  set queenPocketed(bool q) => _queenPocketed = q;
+  @visibleForTesting
+  bool get queenCovered => _queenCovered;
+  @visibleForTesting
+  set queenCovered(bool q) => _queenCovered = q;
+  @visibleForTesting
+  bool get needsCover => _needsCover;
+  @visibleForTesting
+  set needsCover(bool n) => _needsCover = n;
+  @visibleForTesting
+  PlayerColor? get queenPocketedBy => _queenPocketedBy;
+  @visibleForTesting
+  set queenPocketedBy(PlayerColor? p) => _queenPocketedBy = p;
+  @visibleForTesting
+  double get strikerSliderX => _strikerSliderX;
+  @visibleForTesting
+  int get turnExecutionId => _turnExecutionId;
+  @visibleForTesting
+  void pauseGame({bool fromLifecycle = false}) =>
+      _pauseGame(fromLifecycle: fromLifecycle);
+  @visibleForTesting
+  void resumeGame() => _resumeGame();
+  @visibleForTesting
+  void switchTurnForTesting() => _switchTurn();
+  @visibleForTesting
+  void scheduleCpuTurn() => _scheduleCpuTurn();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _boardTheme = StorageService().getBoardTheme();
-    _ai = CarromAI(difficulty: StorageService().getAiDifficulty());
+    StrikerAssetService.instance.preloadTheme(_boardTheme).then((_) {
+      if (mounted) setState(() {});
+    });
+    PieceAssetService.instance.preloadTheme(_boardTheme).then((_) {
+      if (mounted) setState(() {});
+    });
+    _ai = CarromAI(
+      difficulty: widget.difficulty ?? StorageService().getAiDifficulty(),
+    );
 
     _glowController = AnimationController(
       vsync: this,
@@ -137,11 +201,10 @@ class _GameScreenState extends State<GameScreen>
       },
     );
 
-    _initGame();
-
     // High-precision frame-rate independent Ticker loop
     _gameLoopTicker = createTicker(_onGameTick);
-    _gameLoopTicker.start();
+
+    _initGame();
 
     _showToast(
       widget.ruleset == CarromRuleset.freestyle
@@ -160,7 +223,14 @@ class _GameScreenState extends State<GameScreen>
       if (AudioService().musicEnabled) {
         AudioService().resumeBgm();
       }
-      if (!_isPauseDialogShowing && _stateMachine.isPaused && mounted) {
+      final ModalRoute<dynamic>? route = ModalRoute.of(context);
+      final bool isCurrentRoute = route?.isCurrent ?? true;
+      if (!_isPauseDialogShowing &&
+          _stateMachine.isPaused &&
+          mounted &&
+          isCurrentRoute &&
+          !_stateMachine.isGameOver &&
+          !_isGameOverDialogShowing) {
         _showPauseDialog();
       }
     }
@@ -172,6 +242,10 @@ class _GameScreenState extends State<GameScreen>
     _cpuThinkingTimer = null;
     _cpuAimTimer?.cancel();
     _cpuAimTimer = null;
+    if (_cpuAnimTickListener != null) {
+      _cpuAnimController?.removeListener(_cpuAnimTickListener!);
+      _cpuAnimTickListener = null;
+    }
     _cpuAnimController?.stop();
     _cpuAnimController?.reset();
     _dragStart = null;
@@ -187,6 +261,9 @@ class _GameScreenState extends State<GameScreen>
     _lastPowerTier = 0;
     _stateMachine.reset(GameState.placingStriker);
     _turnTimer.startNewTurn();
+    if (_gameLoopTicker != null && !_gameLoopTicker!.isTicking) {
+      _gameLoopTicker!.start();
+    }
 
     _whiteScore = 0;
     _blackScore = 0;
@@ -528,7 +605,7 @@ class _GameScreenState extends State<GameScreen>
   }
 
   void _onGameTick(Duration elapsed) {
-    if (_stateMachine.isPaused) {
+    if (!mounted || _stateMachine.isPaused) {
       _lastElapsed = null;
       return;
     }
@@ -910,8 +987,10 @@ class _GameScreenState extends State<GameScreen>
         _currentPlayer != PlayerColor.black) {
       return;
     }
-    if (!_stateMachine.transitionTo(GameState.cpuThinking)) {
-      return;
+    if (_stateMachine.currentState != GameState.cpuThinking) {
+      if (!_stateMachine.transitionTo(GameState.cpuThinking)) {
+        return;
+      }
     }
     _cancelCpuActions();
     final int scheduledId = _turnExecutionId;
@@ -967,10 +1046,26 @@ class _GameScreenState extends State<GameScreen>
 
     _cpuAnimController?.stop();
     _cpuAnimController?.reset();
+    if (_cpuAnimTickListener != null) {
+      _cpuAnimController?.removeListener(_cpuAnimTickListener!);
+      _cpuAnimTickListener = null;
+    }
 
-    void onAnimTick() {
-      if (!mounted || scheduledId != _turnExecutionId) return;
-      if (_stateMachine.currentState != GameState.cpuThinking) return;
+    _cpuAnimTickListener = () {
+      if (!mounted || scheduledId != _turnExecutionId) {
+        if (_cpuAnimTickListener != null) {
+          _cpuAnimController?.removeListener(_cpuAnimTickListener!);
+          _cpuAnimTickListener = null;
+        }
+        return;
+      }
+      if (_stateMachine.currentState != GameState.cpuThinking) {
+        if (_cpuAnimTickListener != null) {
+          _cpuAnimController?.removeListener(_cpuAnimTickListener!);
+          _cpuAnimTickListener = null;
+        }
+        return;
+      }
       final double t = CurvedAnimation(
         parent: _cpuAnimController!,
         curve: Curves.easeOutCubic,
@@ -981,12 +1076,15 @@ class _GameScreenState extends State<GameScreen>
         _dragStart = const Offset(0.0, 0.0);
         _dragCurrent = targetDrag * t;
       });
-    }
+    };
 
-    _cpuAnimController?.addListener(onAnimTick);
+    _cpuAnimController?.addListener(_cpuAnimTickListener!);
 
     _cpuAnimController?.forward().then((_) {
-      _cpuAnimController?.removeListener(onAnimTick);
+      if (_cpuAnimTickListener != null) {
+        _cpuAnimController?.removeListener(_cpuAnimTickListener!);
+        _cpuAnimTickListener = null;
+      }
       if (!mounted || scheduledId != _turnExecutionId) return;
       if (_stateMachine.currentState != GameState.cpuThinking) return;
 
@@ -1216,7 +1314,7 @@ class _GameScreenState extends State<GameScreen>
     _cancelCpuActions();
     _turnTimer.stop();
     _toastTimer?.cancel();
-    _gameLoopTicker.stop();
+    _gameLoopTicker?.stop();
 
     final PlayerColor? winner = outcome.winner;
     final bool isHumanWinner = !outcome.isDraw &&
@@ -1246,8 +1344,8 @@ class _GameScreenState extends State<GameScreen>
           setState(() {
             _initGame();
             _lastElapsed = null;
-            if (!_gameLoopTicker.isTicking) {
-              _gameLoopTicker.start();
+            if (_gameLoopTicker != null && !_gameLoopTicker!.isTicking) {
+              _gameLoopTicker!.start();
             }
           });
         },
@@ -1383,7 +1481,8 @@ class _GameScreenState extends State<GameScreen>
 
   void _pauseGame({bool fromLifecycle = false}) {
     if (_stateMachine.currentState == GameState.paused ||
-        _stateMachine.currentState == GameState.gameOver) {
+        _stateMachine.currentState == GameState.gameOver ||
+        _isGameOverDialogShowing) {
       return;
     }
 
@@ -1413,22 +1512,61 @@ class _GameScreenState extends State<GameScreen>
     _lastElapsed = null;
     _physics.resetAccumulator();
 
+    if (_gameLoopTicker != null && !_gameLoopTicker!.isTicking) {
+      _gameLoopTicker!.start();
+    }
+
     final resumeState = _stateMachine.resolveResumeState();
-    _stateMachine.transitionTo(resumeState);
-    if (resumeState == GameState.placingStriker ||
-        resumeState == GameState.aiming ||
-        resumeState == GameState.cpuThinking) {
+
+    if (resumeState == GameState.cpuThinking) {
+      if (widget.gameMode == GameMode.vsCpu &&
+          _currentPlayer == PlayerColor.black) {
+        _stateMachine.transitionTo(GameState.cpuThinking);
+        _turnTimer.resume();
+        _scheduleCpuTurn(preserveToast: true);
+      } else {
+        _stateMachine.transitionTo(GameState.placingStriker);
+        _turnTimer.resume();
+      }
+    } else if (resumeState == GameState.simulating) {
+      final bool piecesMoving =
+          _physics.isAnyPieceMoving || _physics.isAnyPiecePocketing;
+      if (!piecesMoving) {
+        _simulatingDuration = 0.0;
+        if (_stateMachine.transitionTo(GameState.evaluating)) {
+          _handleTurnEnd();
+        } else {
+          _stateMachine.transitionTo(GameState.placingStriker);
+          _turnTimer.resume();
+        }
+      } else {
+        _stateMachine.transitionTo(GameState.simulating);
+      }
+    } else if (resumeState == GameState.evaluating ||
+        resumeState == GameState.respotting) {
+      _simulatingDuration = 0.0;
+      if (_stateMachine.transitionTo(GameState.evaluating)) {
+        _handleTurnEnd();
+      } else {
+        _stateMachine.transitionTo(GameState.placingStriker);
+        _turnTimer.resume();
+      }
+    } else if (resumeState == GameState.gameOver) {
+      _stateMachine.transitionTo(GameState.gameOver);
+    } else {
+      _stateMachine.transitionTo(GameState.placingStriker);
       _turnTimer.resume();
     }
 
-    if (resumeState == GameState.cpuThinking) {
-      _scheduleCpuTurn();
-    }
     setState(() {});
   }
 
   void _showPauseDialog() {
-    if (_isPauseDialogShowing) return;
+    if (_isPauseDialogShowing ||
+        _stateMachine.isGameOver ||
+        _isGameOverDialogShowing) {
+      return;
+    }
     _isPauseDialogShowing = true;
     _pauseGame(fromLifecycle: true);
 
@@ -1563,6 +1701,44 @@ class _GameScreenState extends State<GameScreen>
                     onTap: () {
                       AudioService().hapticSelection();
                       TutorialDialog.show(context);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _pauseActionTile(
+                    customIcon: ClubIconType.settings,
+                    label: 'Club Settings',
+                    color: AppColors.ivoryWarm,
+                    onTap: () async {
+                      AudioService().hapticSelection();
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        setState(() {
+                          _boardTheme = StorageService().getBoardTheme();
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _pauseActionTile(
+                    customIcon: ClubIconType.trophy,
+                    label: 'Themes & Boards',
+                    color: AppColors.goldBright,
+                    onTap: () async {
+                      AudioService().hapticSelection();
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ThemeCollectionScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        setState(() {
+                          _boardTheme = StorageService().getBoardTheme();
+                        });
+                      }
                     },
                   ),
                   const SizedBox(height: 8),
@@ -1718,13 +1894,16 @@ class _GameScreenState extends State<GameScreen>
             children: [
               ClubIcon(type: customIcon, color: color, size: 18),
               const SizedBox(width: 10),
-              Text(
-                label,
-                style: GoogleFonts.outfit(
-                  color: AppColors.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
                 ),
               ),
             ],
@@ -1740,7 +1919,7 @@ class _GameScreenState extends State<GameScreen>
     _cancelCpuActions();
     _toastTimer?.cancel();
     _turnTimer.dispose();
-    _gameLoopTicker.dispose();
+    _gameLoopTicker?.dispose();
     _glowController.dispose();
     _cpuAnimController?.dispose();
     _stateMachine.dispose();
@@ -1769,8 +1948,14 @@ class _GameScreenState extends State<GameScreen>
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, viewport) {
-              // Reserve height for HUD (~104px) and Striker Controls (~78px) + tight gaps
-              const double hudAndControlsReserve = 196.0;
+              final bool isPassAndPlay = widget.gameMode == GameMode.passAndPlay;
+              final bool isFreestyle = widget.ruleset == CarromRuleset.freestyle;
+              final bool isWhiteTurn = _currentPlayer == PlayerColor.white;
+              final bool isPlayer2TurnAtTop = isPassAndPlay && !isWhiteTurn;
+
+              // In Pass & Play, reserve height for Top Section (~156px) and Bottom Section (~124px)
+              // ensuring zero overflow on smaller screens and zero vertical shifts between turns.
+              final double hudAndControlsReserve = isPassAndPlay ? 280.0 : 236.0;
               final double maxBoardDim = math.max(
                 120.0,
                 math.min(
@@ -1778,6 +1963,114 @@ class _GameScreenState extends State<GameScreen>
                   viewport.maxHeight - hudAndControlsReserve,
                 ),
               );
+
+              final String p1Name = isPassAndPlay
+                  ? 'Player 1'
+                  : (isFreestyle ? 'You (P1)' : 'You (White)');
+              String p2Name = isPassAndPlay
+                  ? 'Player 2'
+                  : (isFreestyle ? 'CPU (P2)' : 'CPU (Black)');
+
+              if (widget.gameMode == GameMode.practice) {
+                p2Name = 'Target';
+              }
+
+              final int whiteRemaining = _pieces
+                  .where((p) => p.type == PieceType.white && !p.isPocketed)
+                  .length;
+              final int blackRemaining = _pieces
+                  .where((p) => p.type == PieceType.black && !p.isPocketed)
+                  .length;
+
+              String queenText = isFreestyle
+                  ? 'Q:50 · W:20 · B:10'
+                  : '👑 Queen in Play';
+              Color queenColor = AppColors.goldLight;
+              if (_queenCovered) {
+                queenText = isFreestyle
+                    ? '👑 Queen Covered! (+${GameConfig.freestyleQueenPoints})'
+                    : '👑 Queen Covered! (+3)';
+                queenColor = AppColors.accentGreen;
+              } else if (_queenPocketed) {
+                queenText = isFreestyle
+                    ? '👑 Cover Queen (+${GameConfig.freestyleQueenPoints})!'
+                    : '👑 Cover Queen!';
+                queenColor = AppColors.queenPiece;
+              }
+
+              final String turnLabel = widget.gameMode == GameMode.practice
+                  ? 'Practice Arena'
+                  : (isWhiteTurn
+                      ? (isPassAndPlay
+                          ? 'Player 1 Turn'
+                          : 'Your Turn')
+                      : (widget.gameMode == GameMode.vsCpu
+                          ? 'CPU Turn'
+                          : 'Player 2 Turn'));
+
+              final Widget boardWidget = _buildCarromBoardWidget(
+                maxBoardDim: maxBoardDim,
+                reducedMotion: reducedMotion,
+              );
+
+              // 1. Single-player / Practice modes: Original layout preserved untouched
+              if (!isPassAndPlay) {
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4.0,
+                        vertical: 6.0,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildTopOpponentRow(
+                                p2Name: p2Name,
+                                blackRemaining: blackRemaining,
+                                isWhiteTurn: isWhiteTurn,
+                              ),
+                              const SizedBox(height: 8),
+                              _buildIndicatorsRow(
+                                isWhiteTurn: isWhiteTurn,
+                                turnLabel: turnLabel,
+                                queenText: queenText,
+                                queenColor: queenColor,
+                              ),
+                            ],
+                          ),
+                          boardWidget,
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildBottomPlayerRow(
+                                p1Name: p1Name,
+                                whiteRemaining: whiteRemaining,
+                                isWhiteTurn: isWhiteTurn,
+                              ),
+                              const SizedBox(height: 8),
+                              _buildBottomControls(),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              // 2. Pass & Play Mode: Fixed-slot layout guaranteeing ZERO layout shifts / jumps between turns
+              final double availHeight = viewport.maxHeight - 12.0;
+              final double remainingHeight = math.max(
+                hudAndControlsReserve,
+                availHeight - maxBoardDim,
+              );
+              final double topAreaHeight = remainingHeight * (158.0 / 282.0);
+              final double bottomAreaHeight = remainingHeight - topAreaHeight;
 
               return Center(
                 child: ConstrainedBox(
@@ -1788,136 +2081,55 @@ class _GameScreenState extends State<GameScreen>
                       vertical: 6.0,
                     ),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // 1. Competitive Top Scoreboard & Turn Pill
-                        _buildTopScoreboard(),
-
-                        const SizedBox(height: 10),
-
-                        // 2. Maximized Square Carrom Board
+                        // Top Slot (Fixed height, no shift)
                         SizedBox(
-                          width: maxBoardDim,
-                          height: maxBoardDim,
-                          child: LayoutBuilder(
-                            builder: (context, boardConstraints) {
-                              return GestureDetector(
-                                onPanStart: (d) =>
-                                    _onPanStart(d, boardConstraints),
-                                onPanUpdate: _onPanUpdate,
-                                onPanEnd: _onPanEnd,
-                                onPanCancel: _onPanCancel,
-                                child: Stack(
-                                  children: [
-                                    // 1. Carrom Board Surface & Frame
-                                    RepaintBoundary(
-                                      child: CustomPaint(
-                                        size: Size(
-                                          boardConstraints.maxWidth,
-                                          boardConstraints.maxHeight,
-                                        ),
-                                        painter:
-                                            BoardPainter(theme: _boardTheme),
-                                      ),
-                                    ),
-
-                                    // 2. Aim Trajectory & Power Gauge
-                                    if ((_stateMachine.isAiming ||
-                                            _stateMachine.isCpuThinking) &&
-                                        _dragStart != null &&
-                                        _dragCurrent != null)
-                                      CustomPaint(
-                                        size: Size(
-                                          boardConstraints.maxWidth,
-                                          boardConstraints.maxHeight,
-                                        ),
-                                        painter: AimPainter(
-                                          strikerPos: _striker.position,
-                                          dragVector: Vector2(
-                                            _dragCurrent!.dx - _dragStart!.dx,
-                                            _dragCurrent!.dy - _dragStart!.dy,
-                                          ),
-                                          power: math.min(
-                                            1.0,
-                                            (_dragCurrent! - _dragStart!)
-                                                    .distance /
-                                                110.0,
-                                          ),
-                                        ),
-                                      ),
-
-                                    // 3. Pieces & Striker
-                                    CustomPaint(
-                                      size: Size(
-                                        boardConstraints.maxWidth,
-                                        boardConstraints.maxHeight,
-                                      ),
-                                      painter: PiecePainter(
-                                        theme: _boardTheme,
-                                        pieces: _pieces,
-                                        striker: _striker,
-                                        strikerGlowPhase: reducedMotion
-                                            ? 0.5
-                                            : _glowController.value,
-                                        isAiming: (_stateMachine.isAiming ||
-                                                _stateMachine.isCpuThinking) &&
-                                            _dragStart != null &&
-                                            _dragCurrent != null,
-                                        aimPower: (_stateMachine.isAiming ||
-                                                    _stateMachine.isCpuThinking) &&
-                                                _dragStart != null &&
-                                                _dragCurrent != null
-                                            ? math.min(
-                                                1.0,
-                                                (_dragCurrent! - _dragStart!)
-                                                        .distance /
-                                                    110.0,
-                                              )
-                                            : 0.0,
-                                        aimAngle: (_stateMachine.isAiming ||
-                                                    _stateMachine.isCpuThinking) &&
-                                                _dragStart != null &&
-                                                _dragCurrent != null
-                                            ? math.atan2(
-                                                _dragStart!.dy -
-                                                    _dragCurrent!.dy,
-                                                _dragStart!.dx -
-                                                    _dragCurrent!.dx,
-                                              )
-                                            : 0.0,
-                                        strikerTrail: reducedMotion
-                                            ? const []
-                                            : _strikerTrail,
-                                      ),
-                                    ),
-
-                                    // 4. Celebration Sparkles & Floating Scores
-                                    CustomPaint(
-                                      size: Size(
-                                        boardConstraints.maxWidth,
-                                        boardConstraints.maxHeight,
-                                      ),
-                                      painter: ParticlePainter(
-                                        particles: _particles,
-                                        rings: _rings,
-                                        floatingScores: _floatingScores,
-                                        strikerSparks: reducedMotion
-                                            ? const []
-                                            : _strikerSparks,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
+                          height: topAreaHeight,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildTopOpponentRow(
+                                p2Name: p2Name,
+                                blackRemaining: blackRemaining,
+                                isWhiteTurn: isWhiteTurn,
+                              ),
+                              const SizedBox(height: 6),
+                              _buildIndicatorsRow(
+                                isWhiteTurn: isWhiteTurn,
+                                turnLabel: turnLabel,
+                                queenText: queenText,
+                                queenColor: queenColor,
+                              ),
+                              if (isPlayer2TurnAtTop) ...[
+                                const SizedBox(height: 6),
+                                _buildBottomControls(),
+                              ],
+                            ],
                           ),
                         ),
 
-                        const SizedBox(height: 12),
+                        // Center Section: Carrom Board (Invariant Y-position across turns)
+                        boardWidget,
 
-                        // 3. Ergonomic Bottom Striker Control Bar
-                        _buildBottomControls(),
+                        // Bottom Slot (Fixed height, no shift)
+                        SizedBox(
+                          height: bottomAreaHeight,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildBottomPlayerRow(
+                                p1Name: p1Name,
+                                whiteRemaining: whiteRemaining,
+                                isWhiteTurn: isWhiteTurn,
+                              ),
+                              if (!isPlayer2TurnAtTop) ...[
+                                const SizedBox(height: 6),
+                                _buildBottomControls(),
+                              ],
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1931,178 +2143,288 @@ class _GameScreenState extends State<GameScreen>
     );
   }
 
-  Widget _buildTopScoreboard() {
-    final bool isFreestyle = widget.ruleset == CarromRuleset.freestyle;
-    final String p1Name = isFreestyle
-        ? (widget.gameMode == GameMode.passAndPlay ? 'Player 1' : 'You (P1)')
-        : 'You (White)';
-    String p2Name = isFreestyle ? 'CPU (P2)' : 'CPU (Black)';
-
-    if (widget.gameMode == GameMode.passAndPlay) {
-      p2Name = 'Player 2';
-    } else if (widget.gameMode == GameMode.practice) {
-      p2Name = 'Target';
-    }
-
-    final bool isWhiteTurn = _currentPlayer == PlayerColor.white;
-    final int whiteRemaining = _pieces
-        .where((p) => p.type == PieceType.white && !p.isPocketed)
-        .length;
-    final int blackRemaining = _pieces
-        .where((p) => p.type == PieceType.black && !p.isPocketed)
-        .length;
-
-    String queenText = isFreestyle
-        ? '👑 Q:50 • W:10 • B:20'
-        : '👑 Queen in Play';
-    Color queenColor = AppColors.goldLight;
-    if (_queenCovered) {
-      queenText = isFreestyle
-          ? '👑 Queen Covered! (+${GameConfig.freestyleQueenPoints})'
-          : '👑 Queen Covered! (+3)';
-      queenColor = AppColors.accentGreen;
-    } else if (_queenPocketed) {
-      queenText = isFreestyle
-          ? '👑 Cover Queen (+${GameConfig.freestyleQueenPoints})!'
-          : '👑 Queen Pocketed • Must Cover!';
-      queenColor = AppColors.queenPiece;
-    }
-
-    final String turnLabel = widget.gameMode == GameMode.practice
-        ? 'Practice Arena'
-        : (isWhiteTurn
-            ? (widget.gameMode == GameMode.passAndPlay && isFreestyle
-                ? 'Player 1 Turn'
-                : 'Your Turn')
-            : (widget.gameMode == GameMode.vsCpu ? 'CPU Turn' : 'Player 2 Turn'));
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Top Row: Player 1 Panel | Pause Button | Player 2 Panel
-          Row(
-            children: [
-              Expanded(
-                child: _playerBadge(
-                  name: p1Name,
-                  score: _whiteScore,
-                  remaining: whiteRemaining,
-                  penaltyDue: _whitePenaltyDue,
-                  isTurn: isWhiteTurn,
-                  isWhitePiece: true,
-                  alignRight: false,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Center Circular Pause Button
-              GestureDetector(
-                onTap: (_stateMachine.isPaused || _stateMachine.isGameOver)
-                    ? null
-                    : () => _showPauseDialog(),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.cardBg,
-                    border: Border.all(
-                      color: AppColors.gold,
-                      width: 1.2,
+  Widget _buildCarromBoardWidget({
+    required double maxBoardDim,
+    required bool reducedMotion,
+  }) {
+    return SizedBox(
+      width: maxBoardDim,
+      height: maxBoardDim,
+      child: LayoutBuilder(
+        builder: (context, boardConstraints) {
+          return GestureDetector(
+            onPanStart: (d) => _onPanStart(d, boardConstraints),
+            onPanUpdate: _onPanUpdate,
+            onPanEnd: _onPanEnd,
+            onPanCancel: _onPanCancel,
+            child: Stack(
+              children: [
+                // 1. Carrom Board Surface & Frame
+                RepaintBoundary(
+                  child: CustomPaint(
+                    size: Size(
+                      boardConstraints.maxWidth,
+                      boardConstraints.maxHeight,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0x1414243B),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: const [
-                      Opacity(
-                        opacity: 0,
-                        child: Icon(
-                          Icons.pause_circle_filled_rounded,
-                          size: 0,
-                        ),
-                      ),
-                      ClubIcon(
-                        type: ClubIconType.pause,
-                        color: AppColors.goldLight,
-                        size: 20,
-                      ),
-                    ],
+                    painter: BoardPainter(theme: _boardTheme),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _playerBadge(
-                  name: p2Name,
-                  score: _blackScore,
-                  remaining: blackRemaining,
-                  penaltyDue: _blackPenaltyDue,
-                  isTurn: !isWhiteTurn && widget.gameMode != GameMode.practice,
-                  isWhitePiece: false,
-                  alignRight: true,
+
+                // 2. Aim Trajectory & Power Gauge
+                if ((_stateMachine.isAiming || _stateMachine.isCpuThinking) &&
+                    _dragStart != null &&
+                    _dragCurrent != null)
+                  CustomPaint(
+                    size: Size(
+                      boardConstraints.maxWidth,
+                      boardConstraints.maxHeight,
+                    ),
+                    painter: AimPainter(
+                      strikerPos: _striker.position,
+                      dragVector: Vector2(
+                        _dragCurrent!.dx - _dragStart!.dx,
+                        _dragCurrent!.dy - _dragStart!.dy,
+                      ),
+                      power: math.min(
+                        1.0,
+                        (_dragCurrent! - _dragStart!).distance / 110.0,
+                      ),
+                    ),
+                  ),
+
+                // 3. Pieces & Striker
+                CustomPaint(
+                  size: Size(
+                    boardConstraints.maxWidth,
+                    boardConstraints.maxHeight,
+                  ),
+                  painter: PiecePainter(
+                    theme: _boardTheme,
+                    pieces: _pieces,
+                    striker: _striker,
+                    strikerGlowPhase:
+                        reducedMotion ? 0.5 : _glowController.value,
+                    isAiming: (_stateMachine.isAiming ||
+                            _stateMachine.isCpuThinking) &&
+                        _dragStart != null &&
+                        _dragCurrent != null,
+                    aimPower: (_stateMachine.isAiming ||
+                                _stateMachine.isCpuThinking) &&
+                            _dragStart != null &&
+                            _dragCurrent != null
+                        ? math.min(
+                            1.0,
+                            (_dragCurrent! - _dragStart!).distance / 110.0,
+                          )
+                        : 0.0,
+                    aimAngle: (_stateMachine.isAiming ||
+                                _stateMachine.isCpuThinking) &&
+                            _dragStart != null &&
+                            _dragCurrent != null
+                        ? math.atan2(
+                            _dragStart!.dy - _dragCurrent!.dy,
+                            _dragStart!.dx - _dragCurrent!.dx,
+                          )
+                        : 0.0,
+                    strikerTrail:
+                        reducedMotion ? const [] : _strikerTrail,
+                  ),
                 ),
+
+                // 4. Celebration Sparkles & Floating Scores
+                CustomPaint(
+                  size: Size(
+                    boardConstraints.maxWidth,
+                    boardConstraints.maxHeight,
+                  ),
+                  painter: ParticlePainter(
+                    particles: _particles,
+                    rings: _rings,
+                    floatingScores: _floatingScores,
+                    strikerSparks:
+                        reducedMotion ? const [] : _strikerSparks,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTopOpponentRow({
+    required String p2Name,
+    required int blackRemaining,
+    required bool isWhiteTurn,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // Circular Pause Button positioned immediately to the left of CPU card
+          _buildPauseButton(),
+          const SizedBox(width: 10),
+          // CPU / Opponent Card at Top-Right
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 165, maxWidth: 220),
+            child: _playerBadge(
+              name: p2Name,
+              score: _blackScore,
+              remaining: blackRemaining,
+              penaltyDue: _blackPenaltyDue,
+              isTurn: !isWhiteTurn && widget.gameMode != GameMode.practice,
+              isWhitePiece: false,
+              alignRight: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPauseButton() {
+    return GestureDetector(
+      onTap: (_stateMachine.isPaused || _stateMachine.isGameOver)
+          ? null
+          : () => _showPauseDialog(),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.cardBg,
+          border: Border.all(
+            color: AppColors.gold,
+            width: 1.2,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1414243B),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+            BoxShadow(
+              color: Color(0x40FFFFFF),
+              blurRadius: 1.5,
+              offset: Offset(0, -1),
+            ),
+          ],
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const ClubIcon(
+              type: ClubIconType.pause,
+              color: AppColors.goldLight,
+              size: 20,
+            ),
+            // Semantics / test finder anchor
+            Opacity(
+              opacity: 0.01,
+              child: const Icon(
+                Icons.pause_circle_filled_rounded,
+                size: 24,
+                color: AppColors.goldLight,
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIndicatorsRow({
+    required bool isWhiteTurn,
+    required String turnLabel,
+    required String queenText,
+    required Color queenColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Prominent Turn Pill
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 5.5,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: isWhiteTurn
+                  ? const LinearGradient(
+                      colors: [Color(0xFFE8BD56), Color(0xFFC5993B)],
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFF334B68), Color(0xFF1E2E42)],
+                    ),
+              border: Border.all(
+                color: isWhiteTurn ? AppColors.gold : const Color(0xFF6B8DB5),
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isWhiteTurn
+                      ? const Color(0x28C5993B)
+                      : const Color(0x281E2E42),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              turnLabel,
+              style: GoogleFonts.outfit(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+                color: isWhiteTurn
+                    ? const Color(0xFF162030)
+                    : AppColors.ivory,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Queen Status Pill
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 5.5,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: AppColors.cardBg,
+              border: Border.all(
+                color: queenColor.withOpacity(0.55),
+                width: 1.0,
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x1014243B),
+                  blurRadius: 6,
+                  offset: Offset(0, 1.5),
+                ),
+              ],
+            ),
+            child: Text(
+              queenText,
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: queenColor,
+              ),
+            ),
           ),
 
-          const SizedBox(height: 8),
-
-          // Second Row: Centered Prominent Turn Pill + Queen / Toast Status
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Prominent Turn Pill
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 4.5,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: isWhiteTurn
-                      ? const LinearGradient(
-                          colors: [Color(0xFFE8BD56), Color(0xFFC5993B)],
-                        )
-                      : null,
-                  color: isWhiteTurn ? null : AppColors.cardBgElevated,
-                  border: Border.all(
-                    color: isWhiteTurn ? AppColors.gold : AppColors.cardBorder,
-                    width: 1.0,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isWhiteTurn
-                          ? const Color(0x28C5993B)
-                          : const Color(0x1014243B),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  turnLabel,
-                  style: GoogleFonts.outfit(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.4,
-                    color: isWhiteTurn
-                        ? const Color(0xFF162030)
-                        : AppColors.textPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Queen Status Pill
-              Container(
+          if (_toastMessage != null) ...[
+            const SizedBox(width: 6),
+            Flexible(
+              child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 4.5,
@@ -2111,11 +2433,11 @@ class _GameScreenState extends State<GameScreen>
                   borderRadius: BorderRadius.circular(20),
                   color: AppColors.cardBg,
                   border: Border.all(
-                    color: queenColor.withOpacity(0.55),
+                    color: _toastColor.withOpacity(0.55),
                     width: 1.0,
                   ),
-                  boxShadow: [
-                    const BoxShadow(
+                  boxShadow: const [
+                    BoxShadow(
                       color: Color(0x1014243B),
                       blurRadius: 6,
                       offset: Offset(0, 1.5),
@@ -2123,50 +2445,44 @@ class _GameScreenState extends State<GameScreen>
                   ],
                 ),
                 child: Text(
-                  queenText,
+                  _toastMessage!,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: queenColor,
+                    color: _toastColor,
                   ),
                 ),
               ),
-              if (_toastMessage != null) ...[
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4.5,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      color: AppColors.cardBg,
-                      border: Border.all(
-                        color: _toastColor.withOpacity(0.55),
-                        width: 1.0,
-                      ),
-                      boxShadow: [
-                        const BoxShadow(
-                          color: Color(0x1014243B),
-                          blurRadius: 6,
-                          offset: Offset(0, 1.5),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      _toastMessage!,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _toastColor,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomPlayerRow({
+    required String p1Name,
+    required int whiteRemaining,
+    required bool isWhiteTurn,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          // Player Card at Bottom-Left (directly below board)
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 165, maxWidth: 220),
+            child: _playerBadge(
+              name: p1Name,
+              score: _whiteScore,
+              remaining: whiteRemaining,
+              penaltyDue: _whitePenaltyDue,
+              isTurn: isWhiteTurn,
+              isWhitePiece: true,
+              alignRight: false,
+            ),
           ),
         ],
       ),
@@ -2190,11 +2506,37 @@ class _GameScreenState extends State<GameScreen>
       controller: _turnTimer,
       isActiveTurn: showActiveTimer,
       size: 34,
-      child: ClubCoinBadge(
-        theme: _boardTheme,
-        isWhite: isWhitePiece,
-        size: 26,
-      ),
+      child: isFreestyle
+          ? Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isTurn
+                    ? const Color(0xFFF7E6B8)
+                    : AppColors.cardBgElevated,
+                border: Border.all(
+                  color: isTurn ? AppColors.gold : AppColors.cardBorder,
+                  width: 1.0,
+                ),
+              ),
+              child: Icon(
+                alignRight
+                    ? (widget.gameMode == GameMode.vsCpu
+                        ? Icons.smart_toy_rounded
+                        : Icons.person_outline_rounded)
+                    : Icons.person_rounded,
+                size: 16,
+                color: isTurn
+                    ? const Color(0xFF946A14)
+                    : AppColors.textSecondary,
+              ),
+            )
+          : ClubCoinBadge(
+              theme: _boardTheme,
+              isWhite: isWhitePiece,
+              size: 26,
+            ),
     );
     final String remainingText = isFreestyle
         ? '• /${widget.targetScore}'
@@ -2204,8 +2546,7 @@ class _GameScreenState extends State<GameScreen>
 
     final Widget infoColumn = Expanded(
       child: Column(
-        crossAxisAlignment:
-            alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
@@ -2253,7 +2594,7 @@ class _GameScreenState extends State<GameScreen>
                 ),
               ),
               const SizedBox(width: 5),
-              Flexible(
+              Expanded(
                 child: Text(
                   remainingText,
                   overflow: TextOverflow.ellipsis,
@@ -2276,7 +2617,7 @@ class _GameScreenState extends State<GameScreen>
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         color: isTurn ? const Color(0xFFFFFBF2) : AppColors.cardBg,
         border: Border.all(
           color: isTurn
@@ -2364,12 +2705,12 @@ class _GameScreenState extends State<GameScreen>
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
         decoration: BoxDecoration(
           color: AppColors.cardBg,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isStrikerBlocked
                 ? AppColors.accentRed.withOpacity(0.65)

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,8 @@ import 'package:carrom_master/models/piece_model.dart';
 import 'package:carrom_master/painters/piece_painter.dart';
 import 'package:carrom_master/painters/particle_painter.dart';
 import 'package:carrom_master/physics/carrom_physics.dart';
+import 'package:carrom_master/services/piece_asset_service.dart';
+import 'package:carrom_master/services/striker_asset_service.dart';
 
 void main() {
   group('Theme-Based Piece Design System Test Suite', () {
@@ -457,6 +460,151 @@ void main() {
         await tester.pump();
 
         expect(find.byType(ThemeBoardPreview), findsOneWidget);
+        expect(find.byType(Image), findsNWidgets(2)); // Board image + Striker badge preview
+      }
+    });
+
+    test('13. Striker Asset Completeness: All 11 themes have high-res PNG & WebP files on disk', () {
+      for (final theme in BoardThemeType.values) {
+        final String pngPath = AppColors.getStrikerAsset(theme);
+        final String webpPath = pngPath.replaceAll('.png', '.webp');
+
+        final pngFile = File(pngPath);
+        final webpFile = File(webpPath);
+
+        expect(pngFile.existsSync(), isTrue, reason: 'PNG asset missing for ${theme.name} at $pngPath');
+        expect(webpFile.existsSync(), isTrue, reason: 'WebP asset missing for ${theme.name} at $webpPath');
+
+        expect(pngFile.lengthSync(), greaterThan(100000), reason: 'PNG file size suspiciously small for ${theme.name}');
+        expect(webpFile.lengthSync(), greaterThan(20000), reason: 'WebP file size suspiciously small for ${theme.name}');
+      }
+    });
+
+    testWidgets('14. Striker Preview Widget: buildPreview renders correctly for all 11 themes', (tester) async {
+      for (final theme in BoardThemeType.values) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: StrikerAssetService.buildPreview(theme: theme, size: 48),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.byType(Container), findsWidgets);
+        expect(find.byType(Image), findsOneWidget);
+      }
+    });
+
+    test('15. StrikerPainter Animation Coverage: PiecePainter executes animations for all 11 themes', () {
+      final List<PieceModel> pieces = [
+        PieceModel(
+          id: 0,
+          type: PieceType.queen,
+          position: Vector2.zero,
+          radius: GameConfig.queenRadius,
+          mass: GameConfig.pieceMass,
+        ),
+      ];
+      final PieceModel striker = PieceModel(
+        id: 99,
+        type: PieceType.striker,
+        position: const Vector2(0.0, 160.0),
+        radius: GameConfig.strikerRadius,
+        mass: GameConfig.strikerMass,
+      );
+
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      const size = Size(500, 500);
+
+      for (final theme in BoardThemeType.values) {
+        for (double phase = 0.0; phase <= 1.0; phase += 0.25) {
+          final painter = PiecePainter(
+            theme: theme,
+            pieces: pieces,
+            striker: striker,
+            strikerGlowPhase: phase,
+            isAiming: true,
+            aimPower: 0.75,
+            aimAngle: 0.5,
+          );
+          expect(
+            () => painter.paint(canvas, size),
+            returnsNormally,
+            reason: 'PiecePainter must paint striker animation without exception for ${theme.name} at phase $phase',
+          );
+        }
+      }
+      recorder.endRecording();
+    });
+
+    test('16. Piece Asset Completeness: All 33 pieces have high-res PNG & WebP files on disk', () {
+      int verifiedPieces = 0;
+      for (final theme in BoardThemeType.values) {
+        for (final type in [PieceType.white, PieceType.black, PieceType.queen]) {
+          final String pngPath = PieceAssetService.getPieceAsset(theme, type);
+          final String webpPath = PieceAssetService.getPieceWebpAsset(theme, type);
+
+          final pngFile = File(pngPath);
+          final webpFile = File(webpPath);
+
+          expect(pngFile.existsSync(), isTrue,
+              reason: 'PNG piece missing for ${theme.name} ${type.name} at $pngPath');
+          expect(webpFile.existsSync(), isTrue,
+              reason: 'WebP piece missing for ${theme.name} ${type.name} at $webpPath');
+
+          expect(pngFile.lengthSync(), greaterThan(50000),
+              reason: 'PNG file size suspiciously small for ${theme.name} ${type.name}');
+          expect(webpFile.lengthSync(), greaterThan(10000),
+              reason: 'WebP file size suspiciously small for ${theme.name} ${type.name}');
+
+          verifiedPieces++;
+        }
+      }
+      expect(verifiedPieces, equals(33), reason: 'Must verify exactly 33 piece assets');
+    });
+
+    testWidgets('17. Piece Preview Widget: buildPreview renders correctly for all 33 pieces', (tester) async {
+      for (final theme in BoardThemeType.values) {
+        for (final type in [PieceType.white, PieceType.black, PieceType.queen]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: PieceAssetService.buildPreview(theme: theme, type: type, size: 36),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+
+          expect(find.byType(Container), findsWidgets);
+          expect(find.byType(Image), findsOneWidget);
+        }
+      }
+    });
+
+    testWidgets('18. ClubCoinBadge Theme Parity: Renders piece badge for all themes', (tester) async {
+      for (final theme in BoardThemeType.values) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: ClubCoinBadge(
+                  theme: theme,
+                  isWhite: true,
+                  isQueen: false,
+                  size: 28,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byType(ClubCoinBadge), findsOneWidget);
         expect(find.byType(Image), findsOneWidget);
       }
     });

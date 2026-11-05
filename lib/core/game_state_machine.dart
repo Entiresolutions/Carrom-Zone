@@ -104,10 +104,15 @@ class GameStateMachine extends ChangeNotifier {
   }
 
   /// Resolves the safe resumption state when unpausing.
-  /// If the game was paused while aiming, returns [GameState.placingStriker]
-  /// since touch drag events cannot be restored.
+  /// If the game was paused while aiming, during transient states (evaluating, respotting),
+  /// or with no recorded previous state, returns [GameState.placingStriker]
+  /// to ensure gameplay never deadlocks on unresumable states.
   GameState resolveResumeState() {
-    if (_previousState == null || _previousState == GameState.aiming) {
+    if (_previousState == null ||
+        _previousState == GameState.aiming ||
+        _previousState == GameState.paused ||
+        _previousState == GameState.evaluating ||
+        _previousState == GameState.respotting) {
       return GameState.placingStriker;
     }
     return _previousState!;

@@ -1,8 +1,8 @@
 # 🤖 CARROM ZONE — BOT / CPU AI ENGINE & DIFFICULTY SPECIFICATION
 
-> **Document Version:** 2.1.0 (Production Architecture — Multi-Ruleset & Turn Clock Edition)  
+> **Document Version:** 2.2.0 (Pre-Match Difficulty Dialog & AI Balancing Edition)  
 > **Source Module:** [`lib/ai/carrom_ai.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/ai/carrom_ai.dart)  
-> **Supporting Modules:** [`lib/core/carrom_rule_engine.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/carrom_rule_engine.dart), [`lib/core/turn_timer_controller.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/turn_timer_controller.dart), [`lib/screens/game_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/game_screen.dart)  
+> **Supporting Modules:** [`lib/core/carrom_rule_engine.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/carrom_rule_engine.dart), [`lib/core/turn_timer_controller.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/turn_timer_controller.dart), [`lib/screens/game_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/game_screen.dart), [`lib/screens/menu_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/menu_screen.dart)  
 > **Engine:** Deterministic 2D Physics-Based Predictive AI  
 > **Supported Rulesets:** Classic Carrom (Casual Points) & Freestyle Points Mode  
 > **Supported Difficulties:** Easy (Novice), Medium (Club Player), Hard (Tournament Pro)  
@@ -129,39 +129,56 @@ flowchart TD
 
 | Parameter | Easy (Novice) | Medium (Club Player) | Hard (Master / Pro) |
 |:---|:---:|:---:|:---:|
-| **Simulation Budget** | **2 Candidates** | **4 Candidates** | **6 Candidates** |
-| **Cut Angle Limit (`minCosTheta`)** | **$0.45$** ($\le 63.2^\circ$, direct pots only) | **$0.28$** ($\le 73.7^\circ$, moderate cuts) | **$0.15$** ($\le 81.3^\circ$, tournament cuts) |
-| **Angular Jitter ($\sigma_\theta$)** | $\pm 0.057\text{ rad}$ ($\approx \pm 3.27^\circ$, spread $6.53^\circ$) | $\pm 0.016\text{ rad}$ ($\approx \pm 0.92^\circ$, spread $1.83^\circ$) | $\pm 0.005\text{ rad}$ ($\approx \pm 0.29^\circ$, spread $0.57^\circ$) |
-| **Power Variation** | $82\% - 112\%$ ($\pm 15.0\%$) | $94\% - 106\%$ ($\pm 6.0\%$) | $98\% - 102\%$ ($\pm 2.0\%$) |
-| **Cushion Bank Shots** | **Disabled** | 1-Wall Banks (if direct $< 3$) | **Full 2-Rail Bank Search** |
-| **Defensive Play** | Inactive | Basic defensive nudges | **Aggressive pocket denial** |
+| **Simulation Budget** | **2 Candidates** | **3 Candidates** | **5 Candidates** |
+| **Cut Angle Limit (`minCosTheta`)** | **$0.52$** ($\le 58.7^\circ$, direct pots only) | **$0.38$** ($\le 67.7^\circ$, achievable cuts) | **$0.16$** ($\le 80.8^\circ$, tournament cuts) |
+| **Angular Jitter Spread** | $\approx 10.0^\circ$ ($\pm 5.0^\circ$ base) | $\approx 4.7^\circ$ ($\pm 2.35^\circ$ base, scaled by difficulty) | $\approx 0.86^\circ$ ($\pm 0.43^\circ$ base) |
+| **Power Variation** | $80\% - 120\%$ ($\pm 20.0\%$) | $90\% - 110\%$ ($\pm 10.0\%$) | $98\% - 102\%$ ($\pm 2.0\%$) |
+| **Second Best Candidate Chance** | **$45\%$** | **$35\%$** | **$0\%$** (Always #1) |
+| **Cushion Bank Shots** | **Disabled** | **Disabled** (Direct pots only) | **Full Cushion Bank Search** |
+| **Tactical Defense (Pocket Denial)**| **Disabled** | **Disabled** (Non-punitive) | **Aggressive pocket denial** |
+| **Shot-Difficulty Scaling** | Up to $2.0\times$ on long cuts | Up to $2.0\times$ on long cuts | Tight ($1.0 - 1.25\times$) |
 | **Thinking Time** | $900\text{ms} - 1500\text{ms}$ | $600\text{ms} - 1100\text{ms}$ | $400\text{ms} - 800\text{ms}$ |
 | **Aim Dwell Time** | $500\text{ms} - 800\text{ms}$ | $350\text{ms} - 600\text{ms}$ | $250\text{ms} - 450\text{ms}$ |
-| **Decision Time (avg)** | $\approx 2.5\text{ms}$ | $\approx 4.8\text{ms}$ | $\approx 7.2\text{ms}$ ($< 10\text{ms}$) |
+| **Decision Time (avg)** | $\approx 2.5\text{ms}$ | $\approx 4.2\text{ms}$ | $\approx 6.8\text{ms}$ ($< 10\text{ms}$) |
 
 ---
 
 ### 4.2 Easy Mode (Novice / Casual Friendly)
 - **Goal:** Beginner-friendly tabletop opponent that is enjoyable and beatable without artificial, jarring mistakes.
-- **Cut Angle Restriction:** Discards thin cuts exceeding $63.2^\circ$ (`cosTheta < 0.45`). Only attempts obvious, straight-line shots.
+- **Cut Angle Restriction:** Discards cuts exceeding $58.7^\circ$ (`cosTheta < 0.52`). Only attempts obvious, direct shots.
 - **No Trick Shots:** Completely disables cushion bank shots.
-- **Natural Variance:** Adds realistic angular spread ($\approx 6.53^\circ$ total arc) and launch power variance ($82\% - 112\%$). Shots occasionally lip out, hit pocket jaws, or under-hit long distance pots.
-- **Pacing:** Relaxed cognitive cadence ($900 - 1500\text{ms}$ thinking + $500 - 800\text{ms}$ aim dwell).
+- **Natural Variance:** Adds realistic angular spread ($\approx 10.0^\circ$ total arc) and launch power variance ($80\% - 120\%$).
+- **Limited Queen Planning:** Focuses on own coins first; only contests Queen when required in late game.
 
 ### 4.3 Medium Mode (Balanced Club Player)
-- **Goal:** A balanced, authentic club player experience.
-- **Moderate Cuts:** Capable of cutting coins up to $73.7^\circ$ (`cosTheta < 0.28`).
-- **Conditional Banks:** Only attempts cushion bank shots when congested board clusters leave fewer than 3 direct shot candidates.
-- **Fine Calibration:** Tight angular jitter ($\approx 1.83^\circ$ spread) and controlled power variance ($94\% - 106\%$).
-- **Balanced Pacing:** Natural club rhythm ($600 - 1100\text{ms}$ thinking + $350 - 600\text{ms}$ aim dwell).
+- **Goal:** A balanced, authentic, and enjoyable club player experience.
+- **Achievable Cuts:** Restricts cut angles to $\le 67.7^\circ$ (`cosTheta < 0.38`), eliminating unrealistic razor-thin cuts.
+- **Direct Play:** Cushion bank shots and defensive pocket-denial are disabled, keeping the board open and gameplay engaging.
+- **Dynamic Difficulty-Scaled Jitter:** Base jitter is tuned to $\pm 2.35^\circ$ for clean execution on close straightforward shots, scaling naturally up to $2.0\times$ on long cuts to make difficult shots less reliable without artificial misses.
+- **Imperfect Candidate Selection:** $35\%$ probability to select the second-best candidate, preventing robotic repetition.
+- **Controlled Queen Contesting:** Focuses on standard pieces early/mid game; contests Queen when $\le 2$ pieces remain.
 
 ### 4.4 Hard Mode (Tournament Champion)
 - **Goal:** Formidable, tournament-grade tactical opponent.
-- **Extreme Cuts:** Evaluates thin cut shots up to $81.3^\circ$ (`cosTheta < 0.15`).
+- **Extreme Cuts:** Evaluates thin cut shots up to $80.8^\circ$ (`cosTheta < 0.16`).
+- **Tactical Defense:** Denies human opponent opportunities by nudging threatening coins toward cushions when offensive lines are blocked.
+- **Full Cushion Rebounds:** Searches 1-wall and 2-wall bank shots when direct angles are occluded.
 - **Full Cushion Repertoire:** Proactively analyzes left and right cushion bank rebounds when straight lines are congested.
 - **Master Precision:** Minimal physical jitter ($0.57^\circ$ spread, $98\% - 102\%$ power fidelity).
 - **Tactical Defense:** Denies human opponent opportunities by nudging threatening coins toward cushions when offensive lines are blocked.
 - **Rapid Pacing:** Decisive, sharp execution ($400 - 800\text{ms}$ thinking + $250 - 450\text{ms}$ aim dwell).
+
+### 4.5 Pre-Match Difficulty Selection Dialog (`_DifficultySelectionDialog`)
+Before launching any VS CPU match, the app presents an authoritative difficulty selector modal dialog:
+- **Immediate Contextual Prompt:** When the user taps the **VS CPU** game mode card on the Home/Menu screen, instead of starting blindly, the dialog displays:
+  - Active ruleset indicator (**Classic Carrom** vs **Freestyle Points Mode**).
+  - 3 interactive difficulty option cards: **Easy (Novice)**, **Medium (Club Player)**, and **Hard (Tournament Pro)**.
+  - Granular breakdown of each difficulty's shot profile (accuracy, cut angle limits, bank shot availability).
+  - Radio check indicator and subtle gold elevation on the selected option.
+  - Prominent gold **"START MATCH (<DIFFICULTY>)"** primary action button.
+- **Persistence & Propagation:**
+  - The chosen difficulty is saved to local storage via `StorageService().setAiDifficulty(diff)` and updates the menu screen badge tag immediately.
+  - The chosen difficulty is directly passed into `GameScreen(difficulty: diff)` to configure `CarromAI` for that match.
 
 ---
 
@@ -206,8 +223,8 @@ To make CPU actions transparent and engaging:
 ## 6. MATHEMATICAL & GEOMETRIC PRINCIPLES
 
 ### 6.1 Baseline Striker Positioning & Overlap Invariant
-The AI tests candidate positions along the baseline $Y_{\text{baseline}} = -142.0$:
-$$X_k \in \{-65.0, -50.0, -35.0, -20.0, -5.0, +5.0, +20.0, +35.0, +50.0, +65.0\}$$
+The AI dynamically samples candidate positions along the baseline $Y_{\text{baseline}} = -142.0$ spanning the exact human slider bounds:
+$$X_k \in [\text{GameConfig.strikerMinX}, \text{GameConfig.strikerMaxX}] = [-67.0, +67.0]$$
 For every candidate $X_k$, the striker position $\vec{P}_{\text{striker}} = (X_k, Y_{\text{baseline}})$ must satisfy:
 $$\forall \text{ active piece } p: \quad |\vec{P}_{\text{striker}} - \vec{P}_p| \ge (r_s + r_p - 0.5) = (16.0 + 12.0 - 0.5) = 27.5$$
 
@@ -277,10 +294,10 @@ Before evaluating candidate shots, `CarromAI` creates an isolated clone of all a
 - Audio, particle effects, and haptic triggers are disabled during rollouts.
 
 ### 7.2 Bounded Settlement Horizon & Watchdog
-- The simulation advances at $\Delta t = \frac{1}{60.0}\text{s}$ per tick up to a bounded horizon of **75 steps** ($1.25\text{s}$ simulated physics).
+- The simulation advances at $\Delta t = \frac{1}{60.0}\text{s}$ per tick up to a bounded horizon of **75 steps** ($1.25\text{s}$ simulated physics) or until all active pieces have completely settled (`!isAnyPieceMoving && !isAnyPiecePocketing`).
 - **Early Exits:**
-  - *Foul Early Exit:* Disqualifies shot immediately if the striker falls into any pocket.
-  - *Success Early Exit:* Concludes immediately if the target coin is safely pocketed and the striker has come to a stop.
+  - *Foul Early Exit:* Disqualifies shot immediately if the striker falls into any pocket (`strikerFouled == true`).
+  - *Full Settlement:* Simulates until all secondary collisions, caroms, and delayed pocket events come to a complete rest without premature abortion while pieces are in flight.
 
 ### 7.3 Ruleset-Aware Scoring Matrix & Evaluation
 Rollout outcomes are processed through `CarromTurnEvaluator.evaluate()` and `CarromTurnEvaluator.evaluateMatchOutcome()`:
@@ -292,15 +309,15 @@ $$\text{Fitness} = \text{Base} + S_{\text{rules}} + S_{\text{pot}} + S_{\text{qu
 | **Fatal Scratch (Foul)** | **$-750.0$** | **$-750.0$** | `strikerFouled == true` |
 | **Match Victory** | **$+500.0$** | **$+500.0$** | Match concluding with AI victory / target reached |
 | **Match Loss** | **$-900.0$** | **$-900.0$** | Shot causing human opponent victory |
-| **Net Score Delta** | $+250.0 \times \Delta\text{Score}_{\text{AI}}$ | $+22.0 \times \Delta\text{Score}_{\text{AI}}$ | Legal points scored |
+| **Net Score Delta** | $+250.0 \times \Delta\text{Score}_{\text{AI}}$ | $+20.0 \times \Delta\text{Score}_{\text{AI}}$ | Legal points scored |
 | **Opponent Score Delta** | $-180.0 \times \Delta\text{Score}_{\text{Opp}}$ | $-18.0 \times \Delta\text{Score}_{\text{Opp}}$ | Opponent points conceded |
 | **Turn Continuation** | $+160.0$ | $+160.0$ | `continuesTurn == true` |
-| **Queen Covered** | $+450.0$ | $+450.0$ | Queen legally covered |
-| **Queen Potted (Needs Cover)** | $+300.0$ | $+300.0$ | Queen pocketed cleanly alone |
-| **Failed Queen Cover** | $-220.0$ | $-220.0$ | Queen respotted to center |
-| **Target Pot Bonus** | $+350.0$ | $+350.0$ | Intended target coin pocketed |
-| **Cushion Bank Bonus** | $+60.0$ | $+60.0$ | Successful cushion rebound pot |
-| **Speed Bonus** | $+0.4 \times (75 - \text{steps})$ | $+0.4 \times (75 - \text{steps})$ | Clean fast pots over lingering rolls |
+| **Queen Covered** | $+450.0$ | $+120.0$ | Queen legally covered (points in net delta) |
+| **Queen Potted (Needs Cover)** | $+300.0$ | $+200.0$ | Queen pocketed cleanly alone |
+| **Failed Queen Cover** | $-220.0$ | $-200.0$ | Queen respotted to center |
+| **Target Pot Bonus** | $+350.0$ | $+150.0$ | Intended target coin pocketed |
+| **Cushion Bank Bonus** | $+60.0$ | $+50.0$ | Successful cushion rebound pot |
+| **Speed Bonus** | $+0.4 \times (75 - \text{steps})$ | $+0.3 \times (75 - \text{steps})$ | Clean fast pots over lingering rolls |
 | **Power Efficiency** | $-6.0 \times \text{Power}$ | $-6.0 \times \text{Power}$ | Minimal sufficient power preferred |
 
 ---
@@ -308,8 +325,8 @@ $$\text{Fitness} = \text{Base} + S_{\text{rules}} + S_{\text{pot}} + S_{\text{qu
 ## 8. TACTICAL DEFENSIVE PLAY & SAFE FALLBACK
 
 When no candidate achieves a positive fitness score ($> -100.0$), the AI transitions to **Tactical Defensive Play** (`_findBestDefensiveShot`):
-1. **Threat Assessment:** Scans for opponent coins within $130.0$ units of any corner pocket.
-2. **Pocket Denial:** Takes a controlled $45\%$ power shot to nudge the opponent's threatening coin away from the pocket toward the cushion.
+1. **Threat Assessment:** Scans for opponent coins within $130.0$ units of any corner pocket (in Freestyle, scans all active coins near pockets).
+2. **Pocket Denial:** Takes a controlled $45\%$ power shot to nudge threatening coins away from the pocket toward the cushion.
 3. **Cluster Breakup:** If no opponent threats exist, gently taps its own clustered pieces to create open angles for future turns.
 4. **Safety Constraint:** Rejects any defensive shot that results in a striker foul or an accidental pot of an opponent piece.
 5. **Safe Nudge Fallback:** If all else fails, places the striker at a clear baseline position and plays a soft center nudge ($40\%$ power, $\approx 10.0$ confidence) to pass the turn safely.
@@ -324,13 +341,14 @@ The AI engine is verified through **automated regression test suites**:
 1. **Live State Isolation:** Prediction never mutates live piece positions or velocities (`test/ai_prediction_test.dart`).
 2. **Physics Prediction Fidelity:** Shots predicted as pots in rollout succeed when executed in live physics.
 3. **Scratch / Foul Prevention:** Strictly rejects shots that pocket the striker.
-4. **Striker Placement Invariant:** Striker stays within $[-85.0, +85.0]$ and never overlaps active coins.
+4. **Striker Placement Invariant:** Striker stays within $[-67.0, +67.0]$ and never overlaps active coins.
 5. **Classic Queen Strategy:** Exclusively targets own pieces when cover is needed.
 6. **Freestyle Target Prioritization:** Targets both White and Black coins, preferring 20-pt Black coins over 10-pt White coins (`test/freestyle_and_timer_test.dart`).
 7. **Freestyle Queen Cover:** Covers Queen using any available normal coin.
 8. **Difficulty Jitter Calibration:** Easy displays natural spread, Medium is balanced, and Hard is tournament-sharp.
 9. **Turn Clock Synchronization:** AI operates within the 20-second shot clock and cancels safely on timeout.
-10. **Decision Time Budget Benchmark:** Average execution time across 25 consecutive full 19-piece board calculations is:
+10. **Pre-Match Difficulty Selection Dialog:** User explicitly selects Easy, Medium, or Hard before match launch (`test/ai_balancing_benchmark_test.dart`).
+11. **Decision Time Budget Benchmark:** Average execution time across 25 consecutive full 19-piece board calculations is:
     $$\text{Average Latency} \approx 6.8\text{ms} \quad (< 10.0\text{ms threshold})$$
 
-All **100 tests pass** across the Carrom Zone test suite with **0 analyzer warnings**.
+All **106 tests pass** across the Carrom Zone test suite with **0 analyzer warnings**.

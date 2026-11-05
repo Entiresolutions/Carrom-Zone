@@ -2,7 +2,10 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/piece_model.dart';
 import '../painters/board_painter.dart';
+import '../services/piece_asset_service.dart';
+import '../services/striker_asset_service.dart';
 import 'app_colors.dart';
 import 'theme_piece_style.dart';
 
@@ -163,7 +166,7 @@ class ClubBackgroundAssets {
   static Alignment alignmentFor(ClubBackgroundPreset preset) {
     switch (preset) {
       case ClubBackgroundPreset.splash:
-        return const Alignment(0.0, 0.35);
+        return Alignment.center;
       case ClubBackgroundPreset.home:
         return const Alignment(0.25, 0.0);
       case ClubBackgroundPreset.gameplay:
@@ -307,15 +310,14 @@ class ClubBackground extends StatelessWidget {
   LinearGradient _buildReadabilityScrim(ClubBackgroundPreset preset) {
     switch (preset) {
       case ClubBackgroundPreset.splash:
-        return LinearGradient(
+        return const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            const Color(0xFFF5EFE6).withOpacity(0.12),
             Colors.transparent,
-            const Color(0xFFF5EFE6).withOpacity(0.30),
+            Colors.transparent,
           ],
-          stops: const [0.0, 0.40, 1.0],
+          stops: [0.0, 1.0],
         );
 
       case ClubBackgroundPreset.home:
@@ -861,6 +863,7 @@ enum ClubIconType {
   leaderboard,
   rules,
   settings,
+  themes,
   sfx,
   music,
   haptic,
@@ -896,16 +899,40 @@ class ClubIcon extends StatelessWidget {
   final ClubIconType type;
   final double size;
   final Color? color;
+  final Color? accentColor;
 
   const ClubIcon({
     super.key,
     required this.type,
     this.size = 20,
     this.color,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Professional rounded Material Icons for universal clarity and optical balance
+    final IconData? materialIcon = switch (type) {
+      ClubIconType.rules => Icons.menu_book_rounded,
+      ClubIconType.themes => Icons.palette_rounded,
+      ClubIconType.settings => Icons.tune_rounded,
+      _ => null,
+    };
+
+    if (materialIcon != null) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Center(
+          child: Icon(
+            materialIcon,
+            size: size,
+            color: color ?? AppColors.ivoryWarm,
+          ),
+        ),
+      );
+    }
+
     return SizedBox(
       width: size,
       height: size,
@@ -913,6 +940,7 @@ class ClubIcon extends StatelessWidget {
         painter: _ClubIconPainter(
           type: type,
           color: color ?? AppColors.ivoryWarm,
+          accentColor: accentColor ?? const Color(0xFFD4AF37),
         ),
       ),
     );
@@ -922,8 +950,13 @@ class ClubIcon extends StatelessWidget {
 class _ClubIconPainter extends CustomPainter {
   final ClubIconType type;
   final Color color;
+  final Color accentColor;
 
-  _ClubIconPainter({required this.type, required this.color});
+  _ClubIconPainter({
+    required this.type,
+    required this.color,
+    this.accentColor = const Color(0xFFD4AF37),
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -934,7 +967,7 @@ class _ClubIconPainter extends CustomPainter {
     final Paint strokePaint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.3, w * 0.08)
+      ..strokeWidth = math.max(1.5, w * 0.083)
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
@@ -1051,47 +1084,112 @@ class _ClubIconPainter extends CustomPainter {
         break;
 
       case ClubIconType.rules:
-        // Elegant open book glyph matching reference UI
+        // Modern open-book rulebook icon with harmonious curvature
         final double spineX = center.dx;
-        final double topY = center.dy - h * 0.22;
-        final double midTopY = center.dy - h * 0.26;
-        final double botY = center.dy + h * 0.26;
-        final double midBotY = center.dy + h * 0.22;
-        
+        final double outerLeft = center.dx - w * 0.36;
+        final double outerRight = center.dx + w * 0.36;
+        final double topDipY = center.dy - h * 0.24;
+        final double topCrestY = center.dy - h * 0.32;
+        final double botDipY = center.dy + h * 0.22;
+        final double botCrestY = center.dy + h * 0.16;
+        final double edgeTopY = center.dy - h * 0.26;
+        final double edgeBotY = center.dy + h * 0.24;
+
         // Left page
         final Path leftPage = Path()
-          ..moveTo(spineX, midTopY)
-          ..quadraticBezierTo(center.dx - w * 0.18, topY, center.dx - w * 0.36, topY + h * 0.05)
-          ..lineTo(center.dx - w * 0.36, botY + h * 0.05)
-          ..quadraticBezierTo(center.dx - w * 0.18, botY, spineX, midBotY)
+          ..moveTo(spineX, topDipY)
+          ..quadraticBezierTo(center.dx - w * 0.18, topCrestY, outerLeft, edgeTopY)
+          ..lineTo(outerLeft, edgeBotY)
+          ..quadraticBezierTo(center.dx - w * 0.18, botCrestY, spineX, botDipY)
           ..close();
         canvas.drawPath(leftPage, strokePaint);
-        
+
         // Right page
         final Path rightPage = Path()
-          ..moveTo(spineX, midTopY)
-          ..quadraticBezierTo(center.dx + w * 0.18, topY, center.dx + w * 0.36, topY + h * 0.05)
-          ..lineTo(center.dx + w * 0.36, botY + h * 0.05)
-          ..quadraticBezierTo(center.dx + w * 0.18, botY, spineX, midBotY)
+          ..moveTo(spineX, topDipY)
+          ..quadraticBezierTo(center.dx + w * 0.18, topCrestY, outerRight, edgeTopY)
+          ..lineTo(outerRight, edgeBotY)
+          ..quadraticBezierTo(center.dx + w * 0.18, botCrestY, spineX, botDipY)
           ..close();
         canvas.drawPath(rightPage, strokePaint);
+
+        // Center spine binding
+        canvas.drawLine(
+          Offset(spineX, topDipY),
+          Offset(spineX, botDipY + h * 0.04),
+          strokePaint,
+        );
         break;
 
       case ClubIconType.settings:
-        // Precision circular cog gear with center aperture matching reference UI
-        final double r = w * 0.24;
-        canvas.drawCircle(center, r * 0.45, strokePaint);
-        canvas.drawCircle(center, r, strokePaint);
-        for (int i = 0; i < 6; i++) {
-          final double angle = i * math.pi / 3;
-          final double cosA = math.cos(angle);
-          final double sinA = math.sin(angle);
-          canvas.drawLine(
-            Offset(center.dx + (r - w * 0.02) * cosA, center.dy + (r - w * 0.02) * sinA),
-            Offset(center.dx + (r + w * 0.13) * cosA, center.dy + (r + w * 0.13) * sinA),
-            strokePaint..strokeWidth = math.max(2.2, w * 0.12),
-          );
-        }
+        // Minimal adjustment-sliders icon with balanced tracks and rounded knobs
+        final double leftX = center.dx - w * 0.34;
+        final double rightX = center.dx + w * 0.34;
+        final double track1Y = center.dy - h * 0.24;
+        final double track2Y = center.dy;
+        final double track3Y = center.dy + h * 0.24;
+
+        // 3 Horizontal slider tracks
+        canvas.drawLine(Offset(leftX, track1Y), Offset(rightX, track1Y), strokePaint);
+        canvas.drawLine(Offset(leftX, track2Y), Offset(rightX, track2Y), strokePaint);
+        canvas.drawLine(Offset(leftX, track3Y), Offset(rightX, track3Y), strokePaint);
+
+        // Slider control knob positions (left, right, center-left for dynamic balance)
+        final double knob1X = center.dx - w * 0.12;
+        final double knob2X = center.dx + w * 0.14;
+        final double knob3X = center.dx - w * 0.16;
+        final double knobR = w * 0.105;
+
+        canvas.drawCircle(Offset(knob1X, track1Y), knobR, fillPaint);
+        canvas.drawCircle(Offset(knob2X, track2Y), knobR, fillPaint);
+        canvas.drawCircle(Offset(knob3X, track3Y), knobR, fillPaint);
+        break;
+
+      case ClubIconType.themes:
+        // Premium color-palette icon (artist palette with thumb hole and color wells)
+        final Path palette = Path()
+          ..moveTo(center.dx, center.dy - h * 0.36)
+          ..cubicTo(
+            center.dx + w * 0.22, center.dy - h * 0.36,
+            center.dx + w * 0.38, center.dy - h * 0.18,
+            center.dx + w * 0.38, center.dy,
+          )
+          ..cubicTo(
+            center.dx + w * 0.38, center.dy + h * 0.18,
+            center.dx + w * 0.26, center.dy + h * 0.36,
+            center.dx + w * 0.08, center.dy + h * 0.36,
+          )
+          ..cubicTo(
+            center.dx + w * 0.02, center.dy + h * 0.24,
+            center.dx - w * 0.04, center.dy + h * 0.24,
+            center.dx - w * 0.10, center.dy + h * 0.36,
+          )
+          ..cubicTo(
+            center.dx - w * 0.26, center.dy + h * 0.36,
+            center.dx - w * 0.38, center.dy + h * 0.18,
+            center.dx - w * 0.38, center.dy,
+          )
+          ..cubicTo(
+            center.dx - w * 0.38, center.dy - h * 0.18,
+            center.dx - w * 0.22, center.dy - h * 0.36,
+            center.dx, center.dy - h * 0.36,
+          )
+          ..close();
+        canvas.drawPath(palette, strokePaint);
+
+        // Thumb hole cutout
+        canvas.drawCircle(
+          Offset(center.dx - w * 0.14, center.dy + h * 0.12),
+          w * 0.075,
+          strokePaint,
+        );
+
+        // 4 Pigment color wells
+        final double dotR = w * 0.06;
+        canvas.drawCircle(Offset(center.dx - w * 0.14, center.dy - h * 0.15), dotR, fillPaint);
+        canvas.drawCircle(Offset(center.dx + w * 0.03, center.dy - h * 0.22), dotR, fillPaint);
+        canvas.drawCircle(Offset(center.dx + w * 0.19, center.dy - h * 0.14), dotR, fillPaint);
+        canvas.drawCircle(Offset(center.dx + w * 0.20, center.dy + h * 0.08), dotR, fillPaint);
         break;
 
       case ClubIconType.sfx:
@@ -1616,6 +1714,7 @@ class ThemeBoardPreview extends StatelessWidget {
   final double size;
   final BorderRadius? borderRadius;
   final bool isLocked;
+  final bool showStrikerBadge;
 
   const ThemeBoardPreview({
     super.key,
@@ -1623,6 +1722,7 @@ class ThemeBoardPreview extends StatelessWidget {
     this.size = 56,
     this.borderRadius,
     this.isLocked = false,
+    this.showStrikerBadge = true,
   });
 
   @override
@@ -1660,6 +1760,16 @@ class ThemeBoardPreview extends StatelessWidget {
                 painter: BoardPainter(theme: theme),
               ),
             ),
+            if (showStrikerBadge && !isLocked)
+              Positioned(
+                right: size * 0.05,
+                bottom: size * 0.05,
+                child: StrikerAssetService.buildPreview(
+                  theme: theme,
+                  size: size * 0.36,
+                  showShadow: true,
+                ),
+              ),
             if (isLocked)
               Container(
                 color: const Color(0x9E0B131E),
@@ -1695,6 +1805,36 @@ class ClubCoinBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveTheme = theme ?? BoardThemeType.mahogany;
+    final PieceType pieceType = isQueen
+        ? PieceType.queen
+        : (isWhite ? PieceType.white : PieceType.black);
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.38),
+            blurRadius: size * 0.15,
+            offset: Offset(0, size * 0.07),
+          ),
+        ],
+      ),
+      child: Image.asset(
+        PieceAssetService.getPieceAsset(effectiveTheme, pieceType),
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (context, error, stackTrace) =>
+            _buildProceduralFallback(effectiveTheme),
+      ),
+    );
+  }
+
+  Widget _buildProceduralFallback(BoardThemeType effectiveTheme) {
     final ThemePieceStyle style = ThemePieceStyle.of(effectiveTheme);
 
     final List<Color> gradientColors = isQueen
@@ -1723,13 +1863,6 @@ class ClubCoinBadge extends StatelessWidget {
           color: ringColor,
           width: 1.5,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.38),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Center(
         child: Container(
