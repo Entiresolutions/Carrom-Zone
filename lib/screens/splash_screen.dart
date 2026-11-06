@@ -48,7 +48,7 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    _progressAnimation = Tween<double>(begin: 0.05, end: 1.0).animate(
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: Curves.easeInOutCubic,
@@ -75,6 +75,7 @@ class _SplashScreenState extends State<SplashScreen>
     AudioService().musicEnabled = StorageService().getMusicEnabled();
     AudioService().hapticsEnabled = StorageService().getHapticsEnabled();
 
+    // Start background music automatically on the splash screen
     if (AudioService().musicEnabled) {
       AudioService().playBgm();
     }
@@ -170,15 +171,34 @@ class _SplashScreenState extends State<SplashScreen>
 
                       // Bottom Half: Glowing Premium Loading Section (sitting on wooden board scene)
                       Positioned(
-                        bottom: size.height * 0.045,
+                        bottom: size.height * 0.038,
                         left: 0,
                         right: 0,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _buildGlowingLoadingBar(loadingBarWidth, progress),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 12),
                             _buildLoadingText(),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Developed by Entire Solutions',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                fontSize: 11.5,
+                                fontStyle: FontStyle.italic,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.8,
+                                color: const Color(0xFFE5D5AA),
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x80000000),
+                                    blurRadius: 4,
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -217,32 +237,35 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Left Starburst Flare Glint
-          _buildStarburstFlare(),
-          const SizedBox(width: 8),
-          Text(
-            'PLAY  •  COMPETE  •  MASTER',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.outfit(
-              fontSize: 12.0,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 2.6,
-              color: const Color(0xFFFFF2D1),
-              shadows: const [
-                Shadow(
-                  color: Color(0x80D4AF37),
-                  blurRadius: 8,
-                ),
-              ],
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Left Starburst Flare Glint
+            _buildStarburstFlare(),
+            const SizedBox(width: 8),
+            Text(
+              'PLAY  •  COMPETE  •  MASTER',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 12.0,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 2.6,
+                color: const Color(0xFFFFF2D1),
+                shadows: const [
+                  Shadow(
+                    color: Color(0x80D4AF37),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          // Right Starburst Flare Glint
-          _buildStarburstFlare(),
-        ],
+            const SizedBox(width: 8),
+            // Right Starburst Flare Glint
+            _buildStarburstFlare(),
+          ],
+        ),
       ),
     );
   }
@@ -266,97 +289,48 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _buildGlowingLoadingBar(double width, double progress) {
-    const double barHeight = 17.0;
+    final int percentage = (progress * 100).clamp(0, 100).toInt();
+    final double shinePhase = (_controller.value * 4.0) % 1.0;
 
-    return Container(
+    return SizedBox(
       width: width,
-      height: barHeight,
-      padding: const EdgeInsets.all(2.0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        // Metallic Gold Beveled Frame
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFFFFDF7A), // Bright gold highlight
-            Color(0xFFD4AF37), // Classic gold
-            Color(0xFF8C651A), // Deep gold shadow
-          ],
-        ),
-        boxShadow: [
-          // Ambient gold glow
-          BoxShadow(
-            color: const Color(0xFFD4AF37).withOpacity(0.35),
-            blurRadius: 10,
-            spreadRadius: 0.5,
-            offset: const Offset(0, 1),
+      height: 44.0,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          // Custom painted luxury frame, ornamental tips, track, lime fill, shine & starburst
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _LuxuryLoadingBarPainter(
+                progress: progress,
+                shinePhase: shinePhase,
+              ),
+            ),
           ),
-          // Deep drop shadow onto wooden board
-          const BoxShadow(
-            color: Color(0x80000000),
-            blurRadius: 8,
-            offset: Offset(0, 4),
+          // Percentage Badge Text placed crisply in the top-center badge
+          Positioned(
+            top: 0,
+            height: 22.0,
+            child: Center(
+              child: Text(
+                '$percentage%',
+                style: GoogleFonts.outfit(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                  shadows: const [
+                    Shadow(
+                      color: Color(0x90000000),
+                      blurRadius: 3,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: const Color(0xFF04120A), // Dark inner track
-        ),
-        alignment: Alignment.centerLeft,
-        child: FractionallySizedBox(
-          widthFactor: progress.clamp(0.02, 1.0),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              // Radiant Neon Emerald Green Fill
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF69F0AE), // Mint highlight top
-                  Color(0xFF00E676), // Vibrant neon emerald
-                  Color(0xFF00B248), // Deep emerald base
-                ],
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x8800E676),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                // Top Glossy Highlight Reflection Streak
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: (barHeight - 4) * 0.45,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(10),
-                      ),
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withOpacity(0.55),
-                          Colors.white.withOpacity(0.0),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -367,30 +341,30 @@ class _SplashScreenState extends State<SplashScreen>
       children: [
         // Subtle left gold horizontal taper line
         Container(
-          width: 32,
-          height: 1.2,
+          width: 36,
+          height: 1.5,
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               colors: [
                 Colors.transparent,
-                Color(0x99D4AF37),
+                Color(0xCCD4AF37),
               ],
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Text(
           'LOADING...',
           style: GoogleFonts.outfit(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 2.8,
-            color: const Color(0xFFF9E8B6),
+            fontSize: 12.0,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 3.5,
+            color: const Color(0xFFE8E8E7),
             shadows: const [
               Shadow(
-                color: Color(0x60000000),
-                blurRadius: 6,
-                offset: Offset(0, 2),
+                color: Color(0x90000000),
+                blurRadius: 4,
+                offset: Offset(0, 1.5),
               ),
               Shadow(
                 color: Color(0x40D4AF37),
@@ -399,15 +373,15 @@ class _SplashScreenState extends State<SplashScreen>
             ],
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         // Subtle right gold horizontal taper line
         Container(
-          width: 32,
-          height: 1.2,
+          width: 36,
+          height: 1.5,
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Color(0x99D4AF37),
+                Color(0xCCD4AF37),
                 Colors.transparent,
               ],
             ),
@@ -415,5 +389,261 @@ class _SplashScreenState extends State<SplashScreen>
         ),
       ],
     );
+  }
+}
+
+/// Custom painter for the luxury Carrom Zone splash progress bar matching reference design:
+/// - Beveled metallic gold frame with left, right, and bottom ornamental spear tips
+/// - Sunken dark emerald-green track with deep inner shadow
+/// - Smooth lime-green gradient fill with diagonal animated sheen stripes
+/// - Top specular gloss reflection highlight
+/// - Radiant 4-point diamond starburst glint at the fill endpoint
+/// - Integrated dark emerald percentage badge with gold border
+class _LuxuryLoadingBarPainter extends CustomPainter {
+  final double progress;
+  final double shinePhase;
+
+  const _LuxuryLoadingBarPainter({
+    required this.progress,
+    required this.shinePhase,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const double tipWidth = 6.5;
+    const double barTop = 15.0;
+    const double barHeight = 23.0;
+    const double badgeWidth = 60.0;
+    const double badgeHeight = 22.0;
+    const double bottomTipHeight = 6.0;
+    const double borderWidth = 2.2;
+
+    final double width = size.width;
+    final double centerX = width / 2.0;
+    final double barWidth = width - 2 * tipWidth;
+    final double barMidY = barTop + barHeight / 2.0;
+    final double barBottomY = barTop + barHeight;
+
+    final Rect barRect = Rect.fromLTWH(tipWidth, barTop, barWidth, barHeight);
+    final RRect barRRect = RRect.fromRectAndRadius(
+      barRect,
+      const Radius.circular(barHeight / 2),
+    );
+
+    final Rect badgeRect = Rect.fromLTWH(
+      centerX - badgeWidth / 2.0,
+      0,
+      badgeWidth,
+      badgeHeight,
+    );
+    final RRect badgeRRect = RRect.fromRectAndRadius(
+      badgeRect,
+      const Radius.circular(badgeHeight / 2),
+    );
+
+    // 1. Drop Shadows onto Carrom Board
+    final Path shadowPath = Path()
+      ..addRRect(barRRect)
+      ..addRRect(badgeRRect);
+    canvas.drawShadow(shadowPath, Colors.black.withOpacity(0.65), 8.0, true);
+    canvas.drawShadow(shadowPath, const Color(0xFFD4AF37).withOpacity(0.25), 10.0, false);
+
+    // 2. Gold Shader (Metallic Gradient)
+    final Rect fullGoldRect = Rect.fromLTWH(0, 0, width, barBottomY + bottomTipHeight);
+    final Paint goldFillPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFFFFF4B2), // Bright highlight
+          Color(0xFFE5C058), // Rich gold
+          Color(0xFFB8861E), // Deep gold
+          Color(0xFF7A540E), // Bronze shadow
+        ],
+        stops: [0.0, 0.35, 0.70, 1.0],
+      ).createShader(fullGoldRect);
+
+    // 3. Draw Left, Right & Bottom Ornamental Tips (Filled Gold)
+    final Path tipsPath = Path();
+    // Left diamond tip
+    tipsPath.moveTo(tipWidth + 1.0, barMidY - 5.5);
+    tipsPath.lineTo(0.0, barMidY);
+    tipsPath.lineTo(tipWidth + 1.0, barMidY + 5.5);
+    tipsPath.close();
+
+    // Right diamond tip
+    tipsPath.moveTo(width - tipWidth - 1.0, barMidY - 5.5);
+    tipsPath.lineTo(width, barMidY);
+    tipsPath.lineTo(width - tipWidth - 1.0, barMidY + 5.5);
+    tipsPath.close();
+
+    // Bottom center downward triangle tip
+    tipsPath.moveTo(centerX - 6.0, barBottomY - 1.0);
+    tipsPath.lineTo(centerX, barBottomY + bottomTipHeight);
+    tipsPath.lineTo(centerX + 6.0, barBottomY - 1.0);
+    tipsPath.close();
+
+    canvas.drawPath(tipsPath, goldFillPaint);
+
+    // 4. Main Bar Gold Outer Border
+    final Paint goldStrokePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = borderWidth
+      ..shader = goldFillPaint.shader;
+    canvas.drawRRect(barRRect, goldStrokePaint);
+
+    // 5. Dark Emerald Inner Track
+    final Rect innerRect = Rect.fromLTWH(
+      barRect.left + borderWidth,
+      barRect.top + borderWidth,
+      barRect.width - 2 * borderWidth,
+      barRect.height - 2 * borderWidth,
+    );
+    final RRect innerRRect = RRect.fromRectAndRadius(
+      innerRect,
+      Radius.circular(innerRect.height / 2),
+    );
+
+    final Paint trackPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFF04160B), // Deep shadow top
+          Color(0xFF0A2B18), // Emerald center
+          Color(0xFF04140A), // Dark shadow bottom
+        ],
+      ).createShader(innerRect);
+    canvas.drawRRect(innerRRect, trackPaint);
+
+    // 6. Smooth Lime-Green Progress Fill
+    final double clampedProgress = progress.clamp(0.0, 1.0);
+    final double fillWidth = innerRect.width * clampedProgress;
+
+    if (fillWidth > 1.0) {
+      canvas.save();
+      canvas.clipRRect(innerRRect);
+
+      final Rect fillRect = Rect.fromLTWH(
+        innerRect.left,
+        innerRect.top,
+        fillWidth,
+        innerRect.height,
+      );
+      final RRect fillRRect = RRect.fromRectAndRadius(
+        fillRect,
+        Radius.circular(innerRect.height / 2),
+      );
+
+      // Vivid Lime-Green Gradient matching reference
+      final Paint fillPaint = Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Color(0xFF28B435), // Emerald green start
+            Color(0xFF5DD81B), // Vibrant lime
+            Color(0xFFBCE81B), // Sunny lime
+            Color(0xFFEDFC3B), // Radiant neon gold-lime end
+          ],
+          stops: [0.0, 0.40, 0.80, 1.0],
+        ).createShader(fillRect);
+      canvas.drawRRect(fillRRect, fillPaint);
+
+      // Moving Diagonal Shine / Sheen Stripes
+      canvas.save();
+      canvas.clipRRect(fillRRect);
+      final Paint sheenPaint = Paint()
+        ..color = const Color(0x32FFFFFF)
+        ..strokeWidth = 3.8
+        ..style = PaintingStyle.stroke;
+      const double stripeSpacing = 14.0;
+      final double offset = (shinePhase * stripeSpacing);
+      for (double x = -innerRect.height; x < fillWidth + innerRect.height; x += stripeSpacing) {
+        canvas.drawLine(
+          Offset(innerRect.left + x + offset, innerRect.bottom),
+          Offset(innerRect.left + x + offset + innerRect.height, innerRect.top),
+          sheenPaint,
+        );
+      }
+      canvas.restore();
+
+      // Top Specular Gloss Reflection
+      final Rect glossRect = Rect.fromLTWH(
+        innerRect.left,
+        innerRect.top,
+        fillWidth,
+        innerRect.height * 0.42,
+      );
+      final Paint glossPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white.withOpacity(0.55),
+            Colors.white.withOpacity(0.0),
+          ],
+        ).createShader(glossRect);
+      canvas.drawRect(glossRect, glossPaint);
+
+      canvas.restore();
+
+      // 7. Sparkle / Starburst Flare at Progress Endpoint
+      if (clampedProgress > 0.04) {
+        final double sparkleX = (innerRect.left + fillWidth - 2.5).clamp(
+          innerRect.left + 4.0,
+          innerRect.right - 4.0,
+        );
+        final double sparkleY = innerRect.top + 3.2;
+
+        // Radial golden aura bloom
+        final Paint bloomPaint = Paint()
+          ..shader = RadialGradient(
+            colors: [
+              const Color(0xE6FFF69B),
+              const Color(0x60FFF69B),
+              Colors.transparent,
+            ],
+            stops: const [0.0, 0.4, 1.0],
+          ).createShader(Rect.fromCircle(center: Offset(sparkleX, sparkleY), radius: 8.5));
+        canvas.drawCircle(Offset(sparkleX, sparkleY), 8.5, bloomPaint);
+
+        // 4-point Diamond Star Flare
+        final Path starPath = Path()
+          ..moveTo(sparkleX, sparkleY - 6.5)
+          ..quadraticBezierTo(sparkleX, sparkleY, sparkleX + 6.5, sparkleY)
+          ..quadraticBezierTo(sparkleX, sparkleY, sparkleX, sparkleY + 6.5)
+          ..quadraticBezierTo(sparkleX, sparkleY, sparkleX - 6.5, sparkleY)
+          ..quadraticBezierTo(sparkleX, sparkleY, sparkleX, sparkleY - 6.5)
+          ..close();
+        final Paint starPaint = Paint()..color = Colors.white;
+        canvas.drawPath(starPath, starPaint);
+      }
+    }
+
+    // 8. Percentage Badge Base & Gold Border
+    // Badge Background (Deep emerald)
+    final Paint badgeBgPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFF092E17),
+          Color(0xFF04160B),
+        ],
+      ).createShader(badgeRect);
+    canvas.drawRRect(badgeRRect, badgeBgPaint);
+
+    // Badge Gold Border
+    final Paint badgeBorderPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..shader = goldFillPaint.shader;
+    canvas.drawRRect(badgeRRect, badgeBorderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LuxuryLoadingBarPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.shinePhase != shinePhase;
   }
 }

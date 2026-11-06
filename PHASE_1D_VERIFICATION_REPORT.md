@@ -88,12 +88,12 @@ This report delivers the comprehensive gameplay regression and stability audit o
 
 ## 4. Modified & Created Files
 
-* [`lib/screens/game_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/game_screen.dart):
+* [`lib/screens/game_screen.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/game_screen.dart):
   * Resolved scoreboard layout flex overflow for narrow screens.
   * Added `Flexible` with `TextOverflow.ellipsis` to bottom striker control status text.
-* [`test/gameplay_regression_test.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/test/gameplay_regression_test.dart) *(New)*:
+* [`test/gameplay_regression_test.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/test/gameplay_regression_test.dart) *(New)*:
   * 8 end-to-end regression tests covering AI difficulty solving, 50-shot high-power dense collision stress, alternating baseline coordinates, practice mode invariants, endgame victory calculations, baseline overlap search, and widget-level smoke tests for all game modes.
-* [`PHASE_1D_VERIFICATION_REPORT.md`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/PHASE_1D_VERIFICATION_REPORT.md) *(New)*:
+* [`PHASE_1D_VERIFICATION_REPORT.md`](file:///c:/Users/Entire/Downloads/carrom_zone/PHASE_1D_VERIFICATION_REPORT.md) *(New)*:
   * Verification report documenting all 37 test scenarios, outcomes, confirmed bug fixes, and Phase 2 readiness assessment.
 
 ---

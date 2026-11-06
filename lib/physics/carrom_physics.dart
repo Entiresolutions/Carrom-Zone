@@ -4,6 +4,8 @@ import '../core/game_config.dart';
 import '../models/piece_model.dart';
 
 typedef CollisionCallback = void Function(double impulse);
+typedef DetailedCollisionCallback = void Function(
+    double impulse, PieceType typeA, PieceType typeB);
 typedef WallCallback = void Function();
 typedef PocketCallback = void Function(PieceModel piece, Vector2 pocket);
 typedef StrikerCollisionCallback = void Function(Vector2 contactPoint, double impulse, bool isWall);
@@ -13,6 +15,7 @@ class CarromPhysics {
   final PieceModel striker;
 
   CollisionCallback? onPieceCollision;
+  DetailedCollisionCallback? onDetailedPieceCollision;
   WallCallback? onWallCollision;
   PocketCallback? onPocket;
   StrikerCollisionCallback? onStrikerCollision;
@@ -35,6 +38,7 @@ class CarromPhysics {
     required this.pieces,
     required this.striker,
     this.onPieceCollision,
+    this.onDetailedPieceCollision,
     this.onWallCollision,
     this.onPocket,
     this.onStrikerCollision,
@@ -172,6 +176,7 @@ class CarromPhysics {
             b.velocity = b.velocity + (impulse / b.mass);
 
             onPieceCollision?.call(impulseMag);
+            onDetailedPieceCollision?.call(impulseMag, a.type, b.type);
 
             if (a.type == PieceType.striker || b.type == PieceType.striker) {
               final double ratioA = a.radius / (a.radius + b.radius);

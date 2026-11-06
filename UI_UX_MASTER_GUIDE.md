@@ -94,26 +94,26 @@ graph TD
 
 | File Path | UI/UX Responsibility |
 | :--- | :--- |
-| [`lib/main.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/main.dart) | Configures portrait lock, transparent status bar, `AppColors.bgDark` system nav bar, and global dark `ThemeData`. |
-| [`lib/core/app_colors.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/app_colors.dart) | Master repository of all color constants, `BoardThemeType` enum, and theme metadata helpers. |
-| [`lib/core/design_system.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/design_system.dart) | Reusable UI building blocks (`ClubBackground`, `ClubCard`, `ClubTypography`, `ClubMotion`, `ClubCrestLogo`, `ClubCoinBadge`). |
-| [`lib/painters/board_painter.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/painters/board_painter.dart) | Renders the Carrom cabinet frame, brass corner L-plates, surface textures, baselines, diagonal arrows, pockets, and 12-point compass mandala. |
-| [`lib/painters/piece_painter.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/painters/piece_painter.dart) | Renders 3D Carrom coins with lathe grooves, contact shadows, and the breathing-halo striker. |
-| [`lib/painters/aim_painter.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/painters/aim_painter.dart) | Renders pull-back tension lines, shadow-backed trajectory dots, ghost striker impact reticle, radial power arc, and `%` pill badge. |
-| [`lib/painters/particle_painter.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/painters/particle_painter.dart) | Renders pocket shockwaves, radial sparkle bursts, and rising floating score badges (`+1`, `👑 +3 QUEEN`, `FOUL -1`). |
-| [`lib/screens/splash_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/splash_screen.dart) | Animated club crest intro, service initialization, and smooth fade transition to the main lobby. |
-| [`lib/screens/menu_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/menu_screen.dart) | Main Club Lobby featuring live miniature board preview, quick theme switcher, game mode cards, and lounge navigation dock. |
-| [`lib/screens/game_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/game_screen.dart) | Competitive HUD, queen/toast status banner, maximized square board viewport, baseline striker slider dock, and pause modal. |
-| [`lib/screens/settings_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/settings_screen.dart) | Interactive miniature board theme cards, 3-bar AI difficulty selector, independent audio/haptic switches, and rules handbook. |
-| [`lib/screens/leaderboard_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/leaderboard_screen.dart) | Segmented mode filter bar, Top-3 Hall of Fame podium pillars, ranked player cards, and reset confirmation modal. |
-| [`lib/screens/game_over_dialog.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/game_over_dialog.dart) | Victory/defeat medallion, side-by-side player score cards, leaderboard name entry, and rematch/menu actions. |
-| [`lib/screens/tutorial_dialog.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/tutorial_dialog.dart) | Interactive 5-step paginated onboarding guide with step badges, dot indicators, and `"Don't show again"` persistence. |
+| [`lib/main.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/main.dart) | Configures portrait lock, transparent status bar, `AppColors.bgDark` system nav bar, and global dark `ThemeData`. |
+| [`lib/core/app_colors.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/core/app_colors.dart) | Master repository of all color constants, `BoardThemeType` enum, and theme metadata helpers. |
+| [`lib/core/design_system.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/core/design_system.dart) | Reusable UI building blocks (`ClubBackground`, `ClubCard`, `ClubTypography`, `ClubMotion`, `ClubCrestLogo`, `ClubCoinBadge`). |
+| [`lib/painters/board_painter.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/painters/board_painter.dart) | Renders the Carrom cabinet frame, brass corner L-plates, surface textures, baselines, diagonal arrows, pockets, and 12-point compass mandala. |
+| [`lib/painters/piece_painter.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/painters/piece_painter.dart) | Renders 3D Carrom coins with lathe grooves, contact shadows, and the breathing-halo striker. |
+| [`lib/painters/aim_painter.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/painters/aim_painter.dart) | Renders pull-back tension lines, shadow-backed trajectory dots, ghost striker impact reticle, radial power arc, and `%` pill badge. |
+| [`lib/painters/particle_painter.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/painters/particle_painter.dart) | Renders pocket shockwaves, radial sparkle bursts, and rising floating score badges (`+1`, `👑 +3 QUEEN`, `FOUL -1`). |
+| [`lib/screens/splash_screen.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/splash_screen.dart) | Animated club crest intro, service initialization, and smooth fade transition to the main lobby. |
+| [`lib/screens/menu_screen.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/menu_screen.dart) | Main Club Lobby featuring live miniature board preview, quick theme switcher, game mode cards, and lounge navigation dock. |
+| [`lib/screens/game_screen.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/game_screen.dart) | Competitive HUD, queen/toast status banner, maximized square board viewport, baseline striker slider dock, and pause modal. |
+| [`lib/screens/settings_screen.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/settings_screen.dart) | Interactive miniature board theme cards, 3-bar AI difficulty selector, independent audio/haptic switches, and rules handbook. |
+| [`lib/screens/leaderboard_screen.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/leaderboard_screen.dart) | Segmented mode filter bar, Top-3 Hall of Fame podium pillars, ranked player cards, and reset confirmation modal. |
+| [`lib/screens/game_over_dialog.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/game_over_dialog.dart) | Victory/defeat medallion, side-by-side player score cards, leaderboard name entry, and rematch/menu actions. |
+| [`lib/screens/tutorial_dialog.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/tutorial_dialog.dart) | Interactive 5-step paginated onboarding guide with step badges, dot indicators, and `"Don't show again"` persistence. |
 
 ---
 
 ## 3. COMPLETE COLOR TOKEN SYSTEM (`AppColors`)
 
-All colors are centrally defined in [`lib/core/app_colors.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/app_colors.dart).
+All colors are centrally defined in [`lib/core/app_colors.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/core/app_colors.dart).
 
 ### 3.1 Primary Club Backgrounds (Deep Navy & Slate)
 | Token Name | Hex Code | ARGB Value | Usage |
@@ -199,7 +199,7 @@ All colors are centrally defined in [`lib/core/app_colors.dart`](file:///c:/User
 
 ## 4. TYPOGRAPHY & VISUAL HIERARCHY (`ClubTypography`)
 
-Defined in [`lib/core/design_system.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/design_system.dart), the typography system pairs two Google Fonts families:
+Defined in [`lib/core/design_system.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/core/design_system.dart), the typography system pairs two Google Fonts families:
 
 1. **`GoogleFonts.cinzel` (Display & Club Prestige Headers):**
    - Engraved serif used strictly for screen titles, modal headers, and championship branding.

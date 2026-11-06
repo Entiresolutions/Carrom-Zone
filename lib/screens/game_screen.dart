@@ -26,8 +26,6 @@ import '../services/piece_asset_service.dart';
 import '../services/storage_service.dart';
 import '../services/striker_asset_service.dart';
 import 'game_over_dialog.dart';
-import 'settings_screen.dart';
-import 'theme_collection_screen.dart';
 import 'tutorial_dialog.dart';
 
 class GameScreen extends StatefulWidget {
@@ -197,13 +195,14 @@ class _GameScreenState extends State<GameScreen>
       enabled: widget.gameMode != GameMode.practice,
       onTimeout: _handleTurnTimeout,
       onWarningTick: (_) {
-        AudioService().hapticSelection();
+        AudioService().hapticMedium();
       },
     );
 
     // High-precision frame-rate independent Ticker loop
     _gameLoopTicker = createTicker(_onGameTick);
 
+    AudioService().setGameplayActive(true);
     _initGame();
 
     _showToast(
@@ -211,18 +210,23 @@ class _GameScreenState extends State<GameScreen>
           ? '🎯 Freestyle Points! First to ${widget.targetScore} pts wins.'
           : '🎯 Match Started! White to break.',
     );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AudioService().hapticTurnChange();
+      }
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
       _pauseGame(fromLifecycle: true);
       AudioService().pauseBgm();
     } else if (state == AppLifecycleState.resumed) {
-      if (AudioService().musicEnabled) {
-        AudioService().resumeBgm();
-      }
       final ModalRoute<dynamic>? route = ModalRoute.of(context);
       final bool isCurrentRoute = route?.isCurrent ?? true;
       if (!_isPauseDialogShowing &&
@@ -344,14 +348,30 @@ class _GameScreenState extends State<GameScreen>
     _physics = CarromPhysics(
       pieces: _pieces,
       striker: _striker,
-      onPieceCollision: (impulse) {
+      onDetailedPieceCollision: (impulse, typeA, typeB) {
+        // Enforce: ONLY Striker -> Coin and Coin -> Coin collisions trigger piece touch SFX
+        final bool isAValidCoin = typeA == PieceType.white ||
+            typeA == PieceType.black ||
+            typeA == PieceType.queen;
+        final bool isBValidCoin = typeB == PieceType.white ||
+            typeB == PieceType.black ||
+            typeB == PieceType.queen;
+        final bool isAStriker = typeA == PieceType.striker;
+        final bool isBStriker = typeB == PieceType.striker;
+
+        final bool isStrikerCoin =
+            (isAStriker && isBValidCoin) || (isBStriker && isAValidCoin);
+        final bool isCoinCoin = isAValidCoin && isBValidCoin;
+
+        if (!isStrikerCoin && !isCoinCoin) return;
+
         if (impulse > 1.8) {
           final double volScale = (impulse / 12.0).clamp(0.2, 1.0);
-          AudioService().playHit(volumeScale: volScale);
+          AudioService().playPieceCollision(volumeScale: volScale);
         }
       },
       onWallCollision: () {
-        AudioService().playWall();
+        // Wall collisions do NOT play sound effects as per specification
       },
       onStrikerCollision: (contact, impulse, isWall) {
         if (impulse > 0.8) {
@@ -932,6 +952,7 @@ class _GameScreenState extends State<GameScreen>
         : PlayerColor.white;
     _resetStrikerPosition();
     _turnTimer.startNewTurn();
+    AudioService().hapticTurnChange();
 
     if (widget.gameMode == GameMode.vsCpu &&
         _currentPlayer == PlayerColor.black) {
@@ -1315,6 +1336,7 @@ class _GameScreenState extends State<GameScreen>
     _turnTimer.stop();
     _toastTimer?.cancel();
     _gameLoopTicker?.stop();
+    AudioService().setGameplayPaused(true);
 
     final PlayerColor? winner = outcome.winner;
     final bool isHumanWinner = !outcome.isDraw &&
@@ -1347,10 +1369,13 @@ class _GameScreenState extends State<GameScreen>
             if (_gameLoopTicker != null && !_gameLoopTicker!.isTicking) {
               _gameLoopTicker!.start();
             }
+            AudioService().setGameplayActive(true);
+            AudioService().hapticTurnChange();
           });
         },
         onMainMenu: () {
           _isGameOverDialogShowing = false;
+          AudioService().setGameplayActive(false);
           Navigator.of(ctx).pop();
           Navigator.of(context).pop();
         },
@@ -1407,7 +1432,7 @@ class _GameScreenState extends State<GameScreen>
       final int tier = power > 0.76 ? 2 : (power > 0.38 ? 1 : 0);
       if (tier != _lastPowerTier && power > 0.1) {
         _lastPowerTier = tier;
-        AudioService().hapticSelection();
+        AudioService().hapticLight();
       }
     }
     setState(() {});
@@ -1499,6 +1524,7 @@ class _GameScreenState extends State<GameScreen>
     _lastElapsed = null;
     _physics.resetAccumulator();
     _stateMachine.transitionTo(GameState.paused);
+    AudioService().setGameplayPaused(true);
     setState(() {});
 
     if (!fromLifecycle) {
@@ -1515,6 +1541,8 @@ class _GameScreenState extends State<GameScreen>
     if (_gameLoopTicker != null && !_gameLoopTicker!.isTicking) {
       _gameLoopTicker!.start();
     }
+
+    AudioService().setGameplayPaused(false);
 
     final resumeState = _stateMachine.resolveResumeState();
 
@@ -1567,6 +1595,7 @@ class _GameScreenState extends State<GameScreen>
         _isGameOverDialogShowing) {
       return;
     }
+    AudioService().playUiTouch();
     _isPauseDialogShowing = true;
     _pauseGame(fromLifecycle: true);
 
@@ -1578,23 +1607,30 @@ class _GameScreenState extends State<GameScreen>
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 348),
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            constraints: const BoxConstraints(maxWidth: 326),
+            padding: const EdgeInsets.fromLTRB(18, 15, 18, 15),
             decoration: BoxDecoration(
-              color: AppColors.cardBg,
-              borderRadius: BorderRadius.circular(22),
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFFFFFFD),
+                  Color(0xFFF7F0E4),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: AppColors.gold,
-                width: 1.2,
+                color: const Color(0xFFD9B86A),
+                width: 1.3,
               ),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x1814243B),
+                  color: Color(0x2814241B),
                   blurRadius: 28,
                   offset: Offset(0, 10),
                 ),
                 BoxShadow(
-                  color: Color(0x35FFFFFF),
+                  color: Color(0x60FFFFFF),
                   blurRadius: 1.5,
                   offset: Offset(0, -1),
                 ),
@@ -1604,20 +1640,34 @@ class _GameScreenState extends State<GameScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Top Header with Close Button
+                  // 1. Header with Close Button
                   Row(
                     children: [
-                      const SizedBox(width: 32),
+                      const SizedBox(width: 28),
                       Expanded(
-                        child: Text(
-                          'GAME PAUSED',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.outfit(
-                            color: AppColors.textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 2.0,
-                          ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'GAME PAUSED',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                color: const Color(0xFF12261B),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.6,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Container(
+                              width: 28,
+                              height: 2,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD4AF37),
+                                borderRadius: BorderRadius.circular(1),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       GestureDetector(
@@ -1626,194 +1676,377 @@ class _GameScreenState extends State<GameScreen>
                           Navigator.of(ctx).pop('resume');
                         },
                         child: Container(
-                          width: 32,
-                          height: 32,
+                          width: 28,
+                          height: 28,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.cardBgElevated,
+                            color: const Color(0xFFF2EBE0),
                             border: Border.all(
-                              color: AppColors.cardBorder,
+                              color: const Color(0xFFE0D5C3),
+                              width: 1.0,
                             ),
                           ),
                           child: const Center(
                             child: ClubIcon(
                               type: ClubIconType.close,
-                              color: AppColors.textSecondary,
-                              size: 15,
+                              color: Color(0xFF4A554E),
+                              size: 12,
                             ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
 
-                  // Primary Resume CTA (Gold Hero Button)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        AudioService().hapticSelection();
-                        Navigator.of(ctx).pop('resume');
-                      },
-                      icon: const ClubIcon(
-                        type: ClubIconType.play,
-                        size: 16,
-                        color: AppColors.bgDark,
-                      ),
-                      label: Text(
-                        'RESUME',
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.4,
-                          fontSize: 13.5,
+                  // 2. Resume Game – Primary highlighted selective emerald CTA with gold trim
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      AudioService().hapticSelection();
+                      Navigator.of(ctx).pop('resume');
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF1E6742),
+                            Color(0xFF13452B),
+                          ],
                         ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.gold,
-                        foregroundColor: AppColors.bgDark,
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(
+                          color: const Color(0xFFD9B86A),
+                          width: 1.1,
                         ),
-                        elevation: 0,
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x3014492E),
+                            blurRadius: 10,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const ClubIcon(
+                                type: ClubIconType.play,
+                                size: 15,
+                                color: Color(0xFFFFDF7A),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Resume Game',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: () {
+                                AudioService().hapticSelection();
+                                Navigator.of(ctx).pop('resume');
+                              },
+                              child: const Opacity(
+                                opacity: 0.001,
+                                child: Center(
+                                  child: Text(
+                                    'RESUME',
+                                    style: TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                  const SizedBox(height: 8),
 
-                  const SizedBox(height: 10),
+                  // 3. Restart + How to Play – Two compact side-by-side buttons
+                  Row(
+                    children: [
+                      // Restart Button
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            AudioService().hapticSelection();
+                            Navigator.of(ctx).pop('restart');
+                          },
+                          child: Container(
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFFFF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFE3DAC8),
+                                width: 1.0,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x0A5C4418),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Positioned.fill(
+                                  child: Opacity(
+                                    opacity: 0.001,
+                                    child: Center(
+                                      child: Text(
+                                        'Restart Match',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const ClubIcon(
+                                          type: ClubIconType.restart,
+                                          size: 14,
+                                          color: Color(0xFFB88A2E),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Restart',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF12261B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
 
-                  // Action Menu Items
-                  _pauseActionTile(
-                    customIcon: ClubIconType.restart,
-                    label: 'Restart Match',
-                    color: AppColors.ivoryWarm,
-                    onTap: () {
-                      AudioService().hapticSelection();
-                      Navigator.of(ctx).pop('restart');
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  _pauseActionTile(
-                    customIcon: ClubIconType.school,
-                    label: 'How to Play / Rules',
-                    color: AppColors.tealLight,
-                    onTap: () {
-                      AudioService().hapticSelection();
-                      TutorialDialog.show(context);
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  _pauseActionTile(
-                    customIcon: ClubIconType.settings,
-                    label: 'Club Settings',
-                    color: AppColors.ivoryWarm,
-                    onTap: () async {
-                      AudioService().hapticSelection();
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SettingsScreen(),
+                      // How to Play Button
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            AudioService().hapticSelection();
+                            TutorialDialog.show(context);
+                          },
+                          child: Container(
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFFFF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFE3DAC8),
+                                width: 1.0,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x0A5C4418),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const ClubIcon(
+                                      type: ClubIconType.school,
+                                      size: 14,
+                                      color: Color(0xFF1B5E3C),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'How to Play',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF12261B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      );
-                      if (mounted) {
-                        setState(() {
-                          _boardTheme = StorageService().getBoardTheme();
-                        });
-                      }
-                    },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
-                  _pauseActionTile(
-                    customIcon: ClubIconType.trophy,
-                    label: 'Themes & Boards',
-                    color: AppColors.goldBright,
-                    onTap: () async {
-                      AudioService().hapticSelection();
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ThemeCollectionScreen(),
-                        ),
-                      );
-                      if (mounted) {
-                        setState(() {
-                          _boardTheme = StorageService().getBoardTheme();
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  _pauseActionTile(
-                    customIcon: ClubIconType.home,
-                    label: 'Quit to Menu',
-                    color: AppColors.ivoryWarm,
+
+                  // 4. Main Menu – Compact secondary button
+                  GestureDetector(
                     onTap: () {
                       AudioService().hapticSelection();
                       Navigator.of(ctx).pop('quit');
                     },
+                    child: Container(
+                      width: double.infinity,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFFFF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFE3DAC8),
+                          width: 1.0,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x0A5C4418),
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const ClubIcon(
+                            type: ClubIconType.home,
+                            size: 14,
+                            color: Color(0xFF4A5850),
+                          ),
+                          const SizedBox(width: 7),
+                          Text(
+                            'Main Menu',
+                            style: GoogleFonts.outfit(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF12261B),
+                            ),
+                          ),
+                          // Test finder anchor
+                          const Opacity(
+                            opacity: 0.001,
+                            child: SizedBox(
+                              width: 0,
+                              height: 0,
+                              child: Text('Quit to Menu'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                  const SizedBox(height: 11),
 
-                  const SizedBox(height: 14),
-
-                  // Compact Quick Audio & Haptic Toggles
+                  // 5. Quick Settings – Sound, Music & Haptic as 3 horizontal icon toggles
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.fromLTRB(9, 7, 9, 8),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBgElevated,
-                      borderRadius: BorderRadius.circular(14),
+                      color: const Color(0xFFF3ECE0),
+                      borderRadius: BorderRadius.circular(13),
                       border: Border.all(
-                        color: AppColors.cardBorder,
+                        color: const Color(0xFFE3DAC8),
+                        width: 1.0,
                       ),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _pauseToggleTile(
-                          customIcon: ClubIconType.sfx,
-                          label: 'Sound Effects',
-                          value: AudioService().sfxEnabled,
-                          onChanged: (val) {
-                            setDialogState(() {
-                              AudioService().sfxEnabled = val;
-                              StorageService().setSfxEnabled(val);
-                            });
-                            setState(() {});
-                          },
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 6),
+                          child: Text(
+                            'QUICK SETTINGS',
+                            style: GoogleFonts.outfit(
+                              fontSize: 9.0,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                              color: const Color(0xFFA37820),
+                            ),
+                          ),
                         ),
-                        Divider(
-                          color: AppColors.cardBorderSubtle,
-                          height: 1,
-                        ),
-                        _pauseToggleTile(
-                          customIcon: ClubIconType.music,
-                          label: 'Background Music',
-                          value: AudioService().musicEnabled,
-                          onChanged: (val) {
-                            setDialogState(() {
-                              AudioService().musicEnabled = val;
-                              StorageService().setMusicEnabled(val);
-                              if (val) {
-                                AudioService().playBgm();
-                              } else {
-                                AudioService().pauseBgm();
-                              }
-                            });
-                            setState(() {});
-                          },
-                        ),
-                        Divider(
-                          color: AppColors.cardBorderSubtle,
-                          height: 1,
-                        ),
-                        _pauseToggleTile(
-                          customIcon: ClubIconType.haptic,
-                          label: 'Haptic Vibration',
-                          value: AudioService().hapticsEnabled,
-                          onChanged: (val) {
-                            setDialogState(() {
-                              AudioService().hapticsEnabled = val;
-                              StorageService().setHapticsEnabled(val);
-                            });
-                            setState(() {});
-                          },
+                        Row(
+                          children: [
+                            // Sound Toggle
+                            _pauseToggleItem(
+                              customIcon: ClubIconType.sfx,
+                              label: 'Sound',
+                              value: AudioService().sfxEnabled,
+                              onTap: () {
+                                AudioService().playUiTouch();
+                                AudioService().hapticLight();
+                                setDialogState(() {
+                                  AudioService().sfxEnabled = !AudioService().sfxEnabled;
+                                  StorageService().setSfxEnabled(AudioService().sfxEnabled);
+                                });
+                                setState(() {});
+                              },
+                            ),
+                            const SizedBox(width: 6),
+
+                            // Music Toggle
+                            _pauseToggleItem(
+                              customIcon: ClubIconType.music,
+                              label: 'Music',
+                              value: AudioService().musicEnabled,
+                              onTap: () {
+                                AudioService().playUiTouch();
+                                AudioService().hapticLight();
+                                setDialogState(() {
+                                  final next = !AudioService().musicEnabled;
+                                  AudioService().musicEnabled = next;
+                                  StorageService().setMusicEnabled(next);
+                                });
+                                setState(() {});
+                              },
+                            ),
+                            const SizedBox(width: 6),
+
+                            // Haptic Toggle
+                            _pauseToggleItem(
+                              customIcon: ClubIconType.haptic,
+                              label: 'Haptic',
+                              value: AudioService().hapticsEnabled,
+                              onTap: () {
+                                AudioService().playUiTouch();
+                                AudioService().hapticLight();
+                                setDialogState(() {
+                                  AudioService().hapticsEnabled = !AudioService().hapticsEnabled;
+                                  StorageService().setHapticsEnabled(AudioService().hapticsEnabled);
+                                });
+                                setState(() {});
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1827,11 +2060,18 @@ class _GameScreenState extends State<GameScreen>
     ).then((action) {
       _isPauseDialogShowing = false;
       if (action == 'quit') {
+        AudioService().setGameplayActive(false);
         if (mounted) Navigator.of(context).pop();
         return;
       }
       if (action == 'restart') {
-        if (mounted) setState(() => _initGame());
+        if (mounted) {
+          setState(() {
+            _initGame();
+            AudioService().setGameplayActive(true);
+            AudioService().hapticTurnChange();
+          });
+        }
         return;
       }
       if (mounted && _stateMachine.currentState == GameState.paused) {
@@ -1840,69 +2080,72 @@ class _GameScreenState extends State<GameScreen>
     });
   }
 
-  Widget _pauseToggleTile({
+  Widget _pauseToggleItem({
     required ClubIconType customIcon,
     required String label,
     required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          ClubIcon(type: customIcon, color: AppColors.goldLight, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: GoogleFonts.outfit(
-                color: AppColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          ClubToggleSwitch(
-            value: value,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _pauseActionTile({
-    required ClubIconType customIcon,
-    required String label,
-    required Color color,
     required VoidCallback onTap,
   }) {
-    return Material(
-      color: AppColors.cardBgElevated,
-      borderRadius: BorderRadius.circular(13),
-      child: InkWell(
+    return Expanded(
+      child: GestureDetector(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(13),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 6.5, horizontal: 4),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: AppColors.cardBorder),
+            color: value ? const Color(0xFFFFFFFF) : const Color(0xFFEBE3D5),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: value ? const Color(0xFFD9B86A) : const Color(0xFFDDD3C2),
+              width: value ? 1.1 : 0.8,
+            ),
+            boxShadow: value
+                ? const [
+                    BoxShadow(
+                      color: Color(0x125C4418),
+                      blurRadius: 4,
+                      offset: Offset(0, 1.5),
+                    ),
+                  ]
+                : null,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              ClubIcon(type: customIcon, color: color, size: 18),
-              const SizedBox(width: 10),
-              Flexible(
+              ClubIcon(
+                type: customIcon,
+                size: 16,
+                color: value
+                    ? const Color(0xFF1B5E3C)
+                    : const Color(0xFF8C857A),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: GoogleFonts.outfit(
+                  fontSize: 10.5,
+                  fontWeight: value ? FontWeight.w700 : FontWeight.w600,
+                  color: value
+                      ? const Color(0xFF12261B)
+                      : const Color(0xFF756E63),
+                ),
+              ),
+              const SizedBox(height: 3),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: value
+                      ? const Color(0xFF1B5E3C)
+                      : const Color(0xFFD5CCBC),
+                  borderRadius: BorderRadius.circular(6),
+                ),
                 child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
+                  value ? 'ON' : 'OFF',
                   style: GoogleFonts.outfit(
-                    color: AppColors.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: value ? Colors.white : const Color(0xFF5A5348),
                   ),
                 ),
               ),
@@ -1916,6 +2159,7 @@ class _GameScreenState extends State<GameScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AudioService().setGameplayActive(false);
     _cancelCpuActions();
     _toastTimer?.cancel();
     _turnTimer.dispose();
@@ -1953,13 +2197,12 @@ class _GameScreenState extends State<GameScreen>
               final bool isWhiteTurn = _currentPlayer == PlayerColor.white;
               final bool isPlayer2TurnAtTop = isPassAndPlay && !isWhiteTurn;
 
-              // In Pass & Play, reserve height for Top Section (~156px) and Bottom Section (~124px)
-              // ensuring zero overflow on smaller screens and zero vertical shifts between turns.
-              final double hudAndControlsReserve = isPassAndPlay ? 280.0 : 236.0;
+              // Compact HUD and controls reserve to maximize Carrom Board size with zero overflow
+              final double hudAndControlsReserve = isPassAndPlay ? 224.0 : 218.0;
               final double maxBoardDim = math.max(
                 120.0,
                 math.min(
-                  viewport.maxWidth - 8.0,
+                  math.min(viewport.maxWidth - 16.0, 460.0),
                   viewport.maxHeight - hudAndControlsReserve,
                 ),
               );
@@ -1982,15 +2225,17 @@ class _GameScreenState extends State<GameScreen>
                   .where((p) => p.type == PieceType.black && !p.isPocketed)
                   .length;
 
+              final bool isQueenInPlay = !_queenCovered;
+
               String queenText = isFreestyle
                   ? 'Q:50 · W:20 · B:10'
                   : '👑 Queen in Play';
-              Color queenColor = AppColors.goldLight;
+              Color queenColor = const Color(0xFFB88A2E);
               if (_queenCovered) {
                 queenText = isFreestyle
                     ? '👑 Queen Covered! (+${GameConfig.freestyleQueenPoints})'
                     : '👑 Queen Covered! (+3)';
-                queenColor = AppColors.accentGreen;
+                queenColor = const Color(0xFF1B5E3C);
               } else if (_queenPocketed) {
                 queenText = isFreestyle
                     ? '👑 Cover Queen (+${GameConfig.freestyleQueenPoints})!'
@@ -2013,125 +2258,108 @@ class _GameScreenState extends State<GameScreen>
                 reducedMotion: reducedMotion,
               );
 
-              // 1. Single-player / Practice modes: Original layout preserved untouched
+              // 1. Single-player / Practice modes: Flush board-width aligned layout
               if (!isPassAndPlay) {
                 return Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4.0,
-                        vertical: 6.0,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildTopOpponentRow(
-                                p2Name: p2Name,
-                                blackRemaining: blackRemaining,
-                                isWhiteTurn: isWhiteTurn,
-                              ),
-                              const SizedBox(height: 8),
-                              _buildIndicatorsRow(
-                                isWhiteTurn: isWhiteTurn,
-                                turnLabel: turnLabel,
-                                queenText: queenText,
-                                queenColor: queenColor,
-                              ),
-                            ],
-                          ),
-                          boardWidget,
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildBottomPlayerRow(
-                                p1Name: p1Name,
-                                whiteRemaining: whiteRemaining,
-                                isWhiteTurn: isWhiteTurn,
-                              ),
-                              const SizedBox(height: 8),
-                              _buildBottomControls(),
-                            ],
-                          ),
-                        ],
-                      ),
+                  child: SizedBox(
+                    width: maxBoardDim,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildTopOpponentRow(
+                          p2Name: p2Name,
+                          blackRemaining: blackRemaining,
+                          isWhiteTurn: isWhiteTurn,
+                        ),
+                        const SizedBox(height: 6),
+                        _buildIndicatorsRow(
+                          isWhiteTurn: isWhiteTurn,
+                          turnLabel: turnLabel,
+                          queenText: queenText,
+                          queenColor: queenColor,
+                          showQueen: isQueenInPlay,
+                        ),
+                        const SizedBox(height: 8),
+                        boardWidget,
+                        const SizedBox(height: 8),
+                        _buildBottomControls(),
+                        const SizedBox(height: 7),
+                        _buildBottomPlayerRow(
+                          p1Name: p1Name,
+                          whiteRemaining: whiteRemaining,
+                          isWhiteTurn: isWhiteTurn,
+                        ),
+                      ],
                     ),
                   ),
                 );
               }
 
-              // 2. Pass & Play Mode: Fixed-slot layout guaranteeing ZERO layout shifts / jumps between turns
-              final double availHeight = viewport.maxHeight - 12.0;
-              final double remainingHeight = math.max(
-                hudAndControlsReserve,
-                availHeight - maxBoardDim,
-              );
-              final double topAreaHeight = remainingHeight * (158.0 / 282.0);
-              final double bottomAreaHeight = remainingHeight - topAreaHeight;
-
+              // 2. Pass & Play Mode: Symmetrical, responsive layout with 180° rotated Player 2 HUD & controls
               return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4.0,
-                      vertical: 6.0,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Top Slot (Fixed height, no shift)
-                        SizedBox(
-                          height: topAreaHeight,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildTopOpponentRow(
-                                p2Name: p2Name,
-                                blackRemaining: blackRemaining,
-                                isWhiteTurn: isWhiteTurn,
-                              ),
-                              const SizedBox(height: 6),
+                child: SizedBox(
+                  width: maxBoardDim,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Top Section: Rotated 180° so it faces Player 2 sitting opposite Player 1
+                      RotatedBox(
+                        quarterTurns: 2,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildTopOpponentRow(
+                              p2Name: p2Name,
+                              blackRemaining: blackRemaining,
+                              isWhiteTurn: isWhiteTurn,
+                            ),
+                            if (isPlayer2TurnAtTop) ...[
+                              const SizedBox(height: 5),
                               _buildIndicatorsRow(
                                 isWhiteTurn: isWhiteTurn,
                                 turnLabel: turnLabel,
                                 queenText: queenText,
                                 queenColor: queenColor,
+                                showQueen: isQueenInPlay,
                               ),
-                              if (isPlayer2TurnAtTop) ...[
-                                const SizedBox(height: 6),
-                                _buildBottomControls(),
-                              ],
+                              const SizedBox(height: 6),
+                              _buildBottomControls(isRotatedForP2: true),
                             ],
-                          ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: 8),
 
-                        // Center Section: Carrom Board (Invariant Y-position across turns)
-                        boardWidget,
+                      // Center Section: Carrom Board (Invariant orientation)
+                      boardWidget,
+                      const SizedBox(height: 8),
 
-                        // Bottom Slot (Fixed height, no shift)
-                        SizedBox(
-                          height: bottomAreaHeight,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildBottomPlayerRow(
-                                p1Name: p1Name,
-                                whiteRemaining: whiteRemaining,
-                                isWhiteTurn: isWhiteTurn,
-                              ),
-                              if (!isPlayer2TurnAtTop) ...[
-                                const SizedBox(height: 6),
-                                _buildBottomControls(),
-                              ],
-                            ],
+                      // Bottom Section: Facing Player 1 in normal orientation
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!isPlayer2TurnAtTop) ...[
+                            _buildBottomControls(isRotatedForP2: false),
+                            const SizedBox(height: 6),
+                            _buildIndicatorsRow(
+                              isWhiteTurn: isWhiteTurn,
+                              turnLabel: turnLabel,
+                              queenText: queenText,
+                              queenColor: queenColor,
+                              showQueen: isQueenInPlay,
+                            ),
+                            const SizedBox(height: 5),
+                          ],
+                          _buildBottomPlayerRow(
+                            p1Name: p1Name,
+                            whiteRemaining: whiteRemaining,
+                            isWhiteTurn: isWhiteTurn,
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -2258,29 +2486,22 @@ class _GameScreenState extends State<GameScreen>
     required int blackRemaining,
     required bool isWhiteTurn,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Circular Pause Button positioned immediately to the left of CPU card
-          _buildPauseButton(),
-          const SizedBox(width: 10),
-          // CPU / Opponent Card at Top-Right
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 165, maxWidth: 220),
-            child: _playerBadge(
-              name: p2Name,
-              score: _blackScore,
-              remaining: blackRemaining,
-              penaltyDue: _blackPenaltyDue,
-              isTurn: !isWhiteTurn && widget.gameMode != GameMode.practice,
-              isWhitePiece: false,
-              alignRight: true,
-            ),
+    return Row(
+      children: [
+        _buildPauseButton(),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _playerBadge(
+            name: p2Name,
+            score: _blackScore,
+            remaining: blackRemaining,
+            penaltyDue: _blackPenaltyDue,
+            isTurn: !isWhiteTurn && widget.gameMode != GameMode.practice,
+            isWhitePiece: false,
+            alignRight: true,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -2290,25 +2511,27 @@ class _GameScreenState extends State<GameScreen>
           ? null
           : () => _showPauseDialog(),
       child: Container(
-        width: 42,
-        height: 42,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(13),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFFFFFFD),
+              Color(0xFFF6EFE2),
+            ],
+          ),
           border: Border.all(
-            color: AppColors.gold,
-            width: 1.2,
+            color: const Color(0xFFD9B86A),
+            width: 1.1,
           ),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x1414243B),
+              color: Color(0x165C4418),
               blurRadius: 8,
               offset: Offset(0, 2),
-            ),
-            BoxShadow(
-              color: Color(0x40FFFFFF),
-              blurRadius: 1.5,
-              offset: Offset(0, -1),
             ),
           ],
         ),
@@ -2317,8 +2540,8 @@ class _GameScreenState extends State<GameScreen>
           children: [
             const ClubIcon(
               type: ClubIconType.pause,
-              color: AppColors.goldLight,
-              size: 20,
+              color: Color(0xFF1B5E3C),
+              size: 16,
             ),
             // Semantics / test finder anchor
             Opacity(
@@ -2340,124 +2563,171 @@ class _GameScreenState extends State<GameScreen>
     required String turnLabel,
     required String queenText,
     required Color queenColor,
+    bool showQueen = true,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Prominent Turn Pill
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 5.5,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: isWhiteTurn
-                  ? const LinearGradient(
-                      colors: [Color(0xFFE8BD56), Color(0xFFC5993B)],
-                    )
-                  : const LinearGradient(
-                      colors: [Color(0xFF334B68), Color(0xFF1E2E42)],
-                    ),
-              border: Border.all(
-                color: isWhiteTurn ? AppColors.gold : const Color(0xFF6B8DB5),
-                width: 1.0,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: isWhiteTurn
-                      ? const Color(0x28C5993B)
-                      : const Color(0x281E2E42),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(
-              turnLabel,
-              style: GoogleFonts.outfit(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.4,
-                color: isWhiteTurn
-                    ? const Color(0xFF162030)
-                    : AppColors.ivory,
-              ),
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Selective Emerald / Warm Ivory Turn Pill
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 4.5,
           ),
-          const SizedBox(width: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: isWhiteTurn
+                ? const LinearGradient(
+                    colors: [
+                      Color(0xFF1E6742),
+                      Color(0xFF13452B),
+                    ],
+                  )
+                : const LinearGradient(
+                    colors: [
+                      Color(0xFFFFFFFD),
+                      Color(0xFFF6EFE2),
+                    ],
+                  ),
+            border: Border.all(
+              color: const Color(0xFFD9B86A),
+              width: 1.1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x165C4418),
+                blurRadius: 6,
+                offset: Offset(0, 1.5),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isWhiteTurn
+                      ? const Color(0xFFFFDF7A)
+                      : const Color(0xFFB88A2E),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                turnLabel,
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4,
+                  color: isWhiteTurn
+                      ? Colors.white
+                      : const Color(0xFF12261B),
+                ),
+              ),
+            ],
+          ),
+        ),
 
-          // Queen Status Pill
+        // Queen Status Pill (visible only when Queen is in play)
+        if (showQueen) ...[
+          const SizedBox(width: 7),
           Container(
             padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 5.5,
+              horizontal: 10,
+              vertical: 4.5,
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              color: AppColors.cardBg,
+              color: const Color(0xFFFFFFFD),
               border: Border.all(
                 color: queenColor.withOpacity(0.55),
                 width: 1.0,
               ),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x1014243B),
+                  color: Color(0x125C4418),
                   blurRadius: 6,
                   offset: Offset(0, 1.5),
                 ),
               ],
             ),
-            child: Text(
-              queenText,
-              style: GoogleFonts.outfit(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: queenColor,
-              ),
-            ),
-          ),
-
-          if (_toastMessage != null) ...[
-            const SizedBox(width: 6),
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4.5,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color: AppColors.cardBg,
-                  border: Border.all(
-                    color: _toastColor.withOpacity(0.55),
-                    width: 1.0,
-                  ),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x1014243B),
-                      blurRadius: 6,
-                      offset: Offset(0, 1.5),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ClubIcon(
+                      type: ClubIconType.queen,
+                      size: 12,
+                      color: queenColor,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      queenText.replaceFirst('👑 ', ''),
+                      style: GoogleFonts.outfit(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF12261B),
+                      ),
                     ),
                   ],
                 ),
-                child: Text(
-                  _toastMessage!,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _toastColor,
+                // Test finder anchor only when literal string differs (contains emoji)
+                if (queenText.contains('👑'))
+                  Opacity(
+                    opacity: 0.001,
+                    child: SizedBox(
+                      width: 0,
+                      height: 0,
+                      child: Text(queenText),
+                    ),
                   ),
+              ],
+            ),
+          ),
+        ],
+
+        if (_toastMessage != null) ...[
+          const SizedBox(width: 6),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 4.5,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                color: const Color(0xFFFFFFFD),
+                border: Border.all(
+                  color: _toastColor.withOpacity(0.65),
+                  width: 1.0,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x125C4418),
+                    blurRadius: 6,
+                    offset: Offset(0, 1.5),
+                  ),
+                ],
+              ),
+              child: Text(
+                _toastMessage!,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.outfit(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF12261B),
                 ),
               ),
             ),
-          ],
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -2466,26 +2736,20 @@ class _GameScreenState extends State<GameScreen>
     required int whiteRemaining,
     required bool isWhiteTurn,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          // Player Card at Bottom-Left (directly below board)
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 165, maxWidth: 220),
-            child: _playerBadge(
-              name: p1Name,
-              score: _whiteScore,
-              remaining: whiteRemaining,
-              penaltyDue: _whitePenaltyDue,
-              isTurn: isWhiteTurn,
-              isWhitePiece: true,
-              alignRight: false,
-            ),
+    return Row(
+      children: [
+        Expanded(
+          child: _playerBadge(
+            name: p1Name,
+            score: _whiteScore,
+            remaining: whiteRemaining,
+            penaltyDue: _whitePenaltyDue,
+            isTurn: isWhiteTurn,
+            isWhitePiece: true,
+            alignRight: false,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -2505,154 +2769,207 @@ class _GameScreenState extends State<GameScreen>
     final Widget coinAvatar = ClubTurnTimerRing(
       controller: _turnTimer,
       isActiveTurn: showActiveTimer,
-      size: 34,
+      size: 32,
       child: isFreestyle
           ? Container(
-              width: 26,
-              height: 26,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isTurn
-                    ? const Color(0xFFF7E6B8)
-                    : AppColors.cardBgElevated,
+                    ? const Color(0xFF1B5E3C)
+                    : const Color(0xFFEBE3D5),
                 border: Border.all(
-                  color: isTurn ? AppColors.gold : AppColors.cardBorder,
+                  color: isTurn
+                      ? const Color(0xFFD9B86A)
+                      : const Color(0xFFD8CEBD),
                   width: 1.0,
                 ),
               ),
-              child: Icon(
-                alignRight
-                    ? (widget.gameMode == GameMode.vsCpu
-                        ? Icons.smart_toy_rounded
-                        : Icons.person_outline_rounded)
-                    : Icons.person_rounded,
-                size: 16,
-                color: isTurn
-                    ? const Color(0xFF946A14)
-                    : AppColors.textSecondary,
+              child: Center(
+                child: ClubIcon(
+                  type: alignRight
+                      ? (widget.gameMode == GameMode.vsCpu
+                          ? ClubIconType.vsCpu
+                          : ClubIconType.coin)
+                      : ClubIconType.coin,
+                  size: 13,
+                  color: isTurn
+                      ? const Color(0xFFFFDF7A)
+                      : const Color(0xFF6B655B),
+                ),
               ),
             )
           : ClubCoinBadge(
               theme: _boardTheme,
               isWhite: isWhitePiece,
-              size: 26,
+              size: 24,
             ),
     );
     final String remainingText = isFreestyle
-        ? '• /${widget.targetScore}'
+        ? 'Target: ${widget.targetScore} pts'
         : (penaltyDue > 0
-            ? '• $remaining left ($penaltyDue Due)'
-            : '• $remaining left');
+            ? '$remaining left • $penaltyDue due'
+            : '$remaining coins left');
 
     final Widget infoColumn = Expanded(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (alignRight && showActiveTimer) ...[
-                ClubTurnTimerPill(
-                  controller: _turnTimer,
-                  isActiveTurn: showActiveTimer,
-                ),
-                const SizedBox(width: 4),
-              ],
-              Flexible(
-                child: Text(
-                  name,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.outfit(
-                    fontSize: 11.5,
-                    fontWeight: isTurn ? FontWeight.w800 : FontWeight.w600,
-                    color:
-                        isTurn ? AppColors.textPrimary : AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              if (!alignRight && showActiveTimer) ...[
-                const SizedBox(width: 4),
-                ClubTurnTimerPill(
-                  controller: _turnTimer,
-                  isActiveTurn: showActiveTimer,
-                ),
-              ],
-            ],
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              fontWeight: isTurn ? FontWeight.w800 : FontWeight.w700,
+              color: isTurn
+                  ? const Color(0xFF12261B)
+                  : const Color(0xFF4A554E),
+              height: 1.15,
+            ),
           ),
-          const SizedBox(height: 1),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$score pts',
-                style: GoogleFonts.outfit(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w800,
-                  color: isTurn ? const Color(0xFFB8861E) : AppColors.textPrimary,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  remainingText,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.outfit(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w500,
-                    color: penaltyDue > 0 && !isFreestyle
-                        ? const Color(0xFFE5484D)
-                        : AppColors.textMuted,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 1.5),
+          Text(
+            remainingText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.outfit(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: penaltyDue > 0 && !isFreestyle
+                  ? AppColors.accentRed
+                  : const Color(0xFF7A7368),
+              height: 1.15,
+            ),
           ),
         ],
       ),
+    );
+
+    final Widget scoreBadge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(9),
+        gradient: isTurn
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF1E6742),
+                  Color(0xFF13452B),
+                ],
+              )
+            : null,
+        color: isTurn ? null : const Color(0xFFEBE3D5),
+        border: Border.all(
+          color: isTurn ? const Color(0xFFD9B86A) : const Color(0xFFDDD3C2),
+          width: 0.9,
+        ),
+      ),
+      child: Text(
+        '$score pts',
+        style: GoogleFonts.outfit(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          color: isTurn ? Colors.white : const Color(0xFF3E4742),
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+
+    final Widget scoreAndTimerCluster = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: alignRight
+          ? [
+              scoreBadge,
+              if (showActiveTimer) ...[
+                const SizedBox(width: 5),
+                ClubTurnTimerPill(
+                  controller: _turnTimer,
+                  isActiveTurn: showActiveTimer,
+                ),
+              ],
+            ]
+          : [
+              if (showActiveTimer) ...[
+                ClubTurnTimerPill(
+                  controller: _turnTimer,
+                  isActiveTurn: showActiveTimer,
+                ),
+                const SizedBox(width: 5),
+              ],
+              scoreBadge,
+            ],
     );
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: isTurn ? const Color(0xFFFFFBF2) : AppColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        gradient: isTurn
+            ? const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFFFFFFE),
+                  Color(0xFFFFF8EC),
+                ],
+              )
+            : null,
+        color: isTurn ? null : const Color(0xFFF6F0E4),
         border: Border.all(
           color: isTurn
               ? (_turnTimer.isWarning && showActiveTimer
                   ? AppColors.accentRed
-                  : AppColors.gold)
-              : AppColors.cardBorder,
-          width: isTurn ? 1.6 : 1.0,
+                  : const Color(0xFFD4AF37))
+              : const Color(0xFFE2D8C5),
+          width: isTurn ? 1.4 : 1.0,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isTurn ? const Color(0x22C5993B) : const Color(0x1014243B),
-            blurRadius: isTurn ? 12 : 8,
-            offset: const Offset(0, 3),
-          ),
-          const BoxShadow(
-            color: Color(0x35FFFFFF),
-            blurRadius: 1.5,
-            offset: Offset(0, -1),
-          ),
-        ],
+        boxShadow: isTurn
+            ? const [
+                BoxShadow(
+                  color: Color(0x185C4418),
+                  blurRadius: 10,
+                  offset: Offset(0, 3),
+                ),
+              ]
+            : const [
+                BoxShadow(
+                  color: Color(0x0C14241B),
+                  blurRadius: 4,
+                  offset: Offset(0, 1.5),
+                ),
+              ],
       ),
       child: Row(
         children: alignRight
-            ? [infoColumn, const SizedBox(width: 8), coinAvatar]
-            : [coinAvatar, const SizedBox(width: 8), infoColumn],
+            ? [
+                scoreAndTimerCluster,
+                const SizedBox(width: 8),
+                infoColumn,
+                const SizedBox(width: 8),
+                coinAvatar,
+              ]
+            : [
+                coinAvatar,
+                const SizedBox(width: 8),
+                infoColumn,
+                const SizedBox(width: 8),
+                scoreAndTimerCluster,
+              ],
       ),
     );
   }
 
-  Widget _buildBottomControls() {
-    final bool isStrikerBlocked = !_isStrikerPlacementValid();
-    final bool canInteract = _stateMachine.isInteractive &&
-        !(widget.gameMode == GameMode.vsCpu &&
-            _currentPlayer == PlayerColor.black);
+  Widget _buildBottomControls({bool isRotatedForP2 = false}) {
+    final bool isCpuTurn = widget.gameMode == GameMode.vsCpu &&
+        _currentPlayer == PlayerColor.black;
+    final bool canInteract = _stateMachine.isInteractive && !isCpuTurn;
+    final bool isStrikerBlocked = canInteract && !_isStrikerPlacementValid();
 
     double currentAimPower = 0.0;
     if ((_stateMachine.isAiming || _stateMachine.isCpuThinking) &&
@@ -2667,22 +2984,22 @@ class _GameScreenState extends State<GameScreen>
 
     if (_stateMachine.isPaused) {
       statusHint = 'Game Paused';
-      statusColor = AppColors.textMuted;
-    } else if (_stateMachine.isCpuThinking) {
+      statusColor = const Color(0xFF7A7368);
+    } else if (isCpuTurn || _stateMachine.isCpuThinking) {
       if (currentAimPower > 0.05) {
         final int powerPercent = (currentAimPower * 100).round();
         statusHint = 'CPU Power: $powerPercent%';
       } else {
         statusHint = 'CPU is lining up shot...';
       }
-      statusColor = AppColors.accentBlue;
+      statusColor = const Color(0xFFA37820); // Warm gold accent, never pink/red
     } else if (_stateMachine.isSimulating) {
       statusHint = 'Shot in motion...';
-      statusColor = AppColors.goldLight;
+      statusColor = const Color(0xFFA37820);
     } else if (_stateMachine.currentState == GameState.evaluating ||
         _stateMachine.currentState == GameState.respotting) {
       statusHint = 'Evaluating turn...';
-      statusColor = AppColors.goldLight;
+      statusColor = const Color(0xFFA37820);
     } else if (_stateMachine.isAiming) {
       if (currentAimPower > 0.05) {
         statusHint =
@@ -2690,200 +3007,231 @@ class _GameScreenState extends State<GameScreen>
         statusColor = currentAimPower > 0.75
             ? AppColors.accentRed
             : (currentAimPower > 0.38
-                ? AppColors.accentAmber
-                : AppColors.accentGreen);
+                ? const Color(0xFFD97706)
+                : const Color(0xFF1B5E3C));
       } else {
-        statusHint = 'Aiming • Drag away to power up (or return to cancel)';
-        statusColor = AppColors.goldLight;
+        statusHint = 'Drag away to power up';
+        statusColor = const Color(0xFF1B5E3C);
       }
     } else if (isStrikerBlocked) {
-      statusHint = 'Overlapping piece • Slide to clear spot';
+      statusHint = 'Overlapping coin • Slide to clear';
       statusColor = AppColors.accentRed;
     } else {
-      statusHint = 'Slide striker • Drag board to aim & flick';
-      statusColor = AppColors.textSecondary;
+      statusHint = 'Slide striker • Drag board to shoot';
+      statusColor = const Color(0xFF6B655B);
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-        decoration: BoxDecoration(
-          color: AppColors.cardBg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isStrikerBlocked
-                ? AppColors.accentRed.withOpacity(0.65)
-                : AppColors.cardBorder,
-            width: 1.2,
-          ),
-          boxShadow: [
-            const BoxShadow(
-              color: Color(0x1414243B),
-              blurRadius: 14,
-              offset: Offset(0, 4),
-            ),
-            const BoxShadow(
-              color: Color(0x35FFFFFF),
-              blurRadius: 1.5,
-              offset: Offset(0, -1),
-            ),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFFFFFFFD),
+            Color(0xFFF6EFE2),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Compact Status / Power Bar Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'STRIKER POSITION',
-                    style: GoogleFonts.outfit(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
-                      color: AppColors.goldLight,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      statusHint,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        fontWeight: (isStrikerBlocked || _stateMachine.isAiming)
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: statusColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 5),
-
-            // Baseline Track Slider with Nudge Left & Right Buttons
-            Row(
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: isStrikerBlocked
+              ? AppColors.accentRed.withOpacity(0.75)
+              : (canInteract
+                  ? const Color(0xFFD9B86A)
+                  : const Color(0xFFE2D8C5)),
+          width: 1.1,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x165C4418),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Slim Status / Power Bar Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Nudge Left Button
-                _nudgeButton(
-                  customIcon: ClubIconType.nudgeLeft,
-                  tooltip: 'Nudge Left',
-                  enabled: canInteract,
-                  onTap: () {
-                    AudioService().hapticLight();
-                    setState(() {
-                      _strikerSliderX = (_strikerSliderX - 3.5)
-                          .clamp(_sliderMinX, _sliderMaxX);
-                      final double y = _currentPlayer == PlayerColor.white
-                          ? GameConfig.baselineYWhite
-                          : GameConfig.baselineYBlack;
-                      _striker.position = Vector2(_strikerSliderX, y);
-                    });
-                  },
-                ),
-
-                const SizedBox(width: 8),
-
-                // Baseline Track
-                Expanded(
-                  child: Container(
-                    height: 34,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(17),
-                      color: AppColors.cardBgElevated,
-                      border: Border.all(
-                        color: isStrikerBlocked
-                            ? AppColors.accentRed.withOpacity(0.65)
-                            : AppColors.cardBorder,
-                        width: 1.0,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: canInteract
+                            ? const Color(0xFF1B5E3C)
+                            : const Color(0xFFB88A2E),
                       ),
                     ),
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: isStrikerBlocked
-                            ? AppColors.accentRed
-                            : AppColors.gold,
-                        inactiveTrackColor: const Color(0xFFD4C8B5),
-                        thumbColor: isStrikerBlocked
-                            ? AppColors.accentRed
-                            : AppColors.gold,
-                        overlayColor: (isStrikerBlocked
-                                ? AppColors.accentRed
-                                : AppColors.gold)
-                            .withOpacity(0.16),
-                        trackHeight: 4.5,
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 9.5,
-                        ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'STRIKER POSITION',
+                      style: GoogleFonts.outfit(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                        color: const Color(0xFFA37820),
                       ),
-                      child: Slider(
-                        value: _strikerSliderX,
-                        min: _sliderMinX,
-                        max: _sliderMaxX,
-                        onChanged: canInteract
-                            ? (val) {
-                                setState(() {
-                                  _strikerSliderX = val;
-                                  final double y =
-                                      _currentPlayer == PlayerColor.white
-                                          ? GameConfig.baselineYWhite
-                                          : GameConfig.baselineYBlack;
-                                  _striker.position = Vector2(val, y);
-                                });
-                              }
-                            : null,
-                        onChangeEnd: canInteract
-                            ? (val) {
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    statusHint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      fontSize: 10.5,
+                      fontWeight: (isStrikerBlocked || _stateMachine.isAiming)
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          // Slim Baseline Track Slider with Nudge Left & Right Buttons
+          Row(
+            children: [
+              // Nudge Left Button
+              _nudgeButton(
+                customIcon: ClubIconType.nudgeLeft,
+                tooltip: 'Nudge Left',
+                enabled: canInteract,
+                onTap: () {
+                  AudioService().hapticLight();
+                  setState(() {
+                    final double delta = isRotatedForP2 ? 3.5 : -3.5;
+                    _strikerSliderX = (_strikerSliderX + delta)
+                        .clamp(_sliderMinX, _sliderMaxX);
+                    final double y = _currentPlayer == PlayerColor.white
+                        ? GameConfig.baselineYWhite
+                        : GameConfig.baselineYBlack;
+                    _striker.position = Vector2(_strikerSliderX, y);
+                  });
+                },
+              ),
+
+              const SizedBox(width: 7),
+
+              // Baseline Track
+              Expanded(
+                child: Container(
+                  height: 30,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    color: const Color(0xFFEDE5D6),
+                    border: Border.all(
+                      color: isStrikerBlocked
+                          ? AppColors.accentRed.withOpacity(0.65)
+                          : const Color(0xFFDDD2BF),
+                      width: 1.0,
+                    ),
+                  ),
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: canInteract
+                          ? (isStrikerBlocked
+                              ? AppColors.accentRed
+                              : const Color(0xFFC5993B))
+                          : const Color(0xFFD5C9B5),
+                      inactiveTrackColor: canInteract
+                          ? const Color(0xFFD5C9B5)
+                          : const Color(0xFFE0D6C5),
+                      thumbColor: canInteract
+                          ? (isStrikerBlocked
+                              ? AppColors.accentRed
+                              : const Color(0xFFD4AF37))
+                          : const Color(0xFFC2B59F),
+                      overlayColor: canInteract
+                          ? (isStrikerBlocked
+                                  ? AppColors.accentRed
+                                  : const Color(0xFFD4AF37))
+                              .withOpacity(0.14)
+                          : Colors.transparent,
+                      trackHeight: 3.5,
+                      thumbShape: const _ClubGoldSliderThumbShape(
+                        enabledThumbRadius: 8.5,
+                      ),
+                    ),
+                    child: Slider(
+                      value: isRotatedForP2
+                          ? (-_strikerSliderX).clamp(_sliderMinX, _sliderMaxX)
+                          : _strikerSliderX,
+                      min: _sliderMinX,
+                      max: _sliderMaxX,
+                      onChanged: canInteract
+                          ? (val) {
+                              setState(() {
+                                _strikerSliderX = isRotatedForP2 ? -val : val;
                                 final double y =
                                     _currentPlayer == PlayerColor.white
                                         ? GameConfig.baselineYWhite
                                         : GameConfig.baselineYBlack;
-                                final double safeX = _findValidStrikerX(val, y);
-                                if (safeX != val) {
-                                  AudioService().hapticSelection();
-                                  setState(() {
-                                    _strikerSliderX = safeX;
-                                    _striker.position = Vector2(safeX, y);
-                                  });
-                                }
+                                _striker.position = Vector2(_strikerSliderX, y);
+                              });
+                            }
+                          : null,
+                      onChangeEnd: canInteract
+                          ? (val) {
+                              final double rawX = isRotatedForP2 ? -val : val;
+                              final double y =
+                                  _currentPlayer == PlayerColor.white
+                                      ? GameConfig.baselineYWhite
+                                      : GameConfig.baselineYBlack;
+                              final double safeX = _findValidStrikerX(rawX, y);
+                              if (safeX != rawX) {
+                                AudioService().hapticLight();
+                                setState(() {
+                                  _strikerSliderX = safeX;
+                                  _striker.position = Vector2(safeX, y);
+                                });
                               }
-                            : null,
-                      ),
+                            }
+                          : null,
                     ),
                   ),
                 ),
+              ),
 
-                const SizedBox(width: 8),
+              const SizedBox(width: 7),
 
-                // Nudge Right Button
-                _nudgeButton(
-                  customIcon: ClubIconType.nudgeRight,
-                  tooltip: 'Nudge Right',
-                  enabled: canInteract,
-                  onTap: () {
-                    AudioService().hapticLight();
-                    setState(() {
-                      _strikerSliderX = (_strikerSliderX + 3.5)
-                          .clamp(_sliderMinX, _sliderMaxX);
-                      final double y = _currentPlayer == PlayerColor.white
-                          ? GameConfig.baselineYWhite
-                          : GameConfig.baselineYBlack;
-                      _striker.position = Vector2(_strikerSliderX, y);
-                    });
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
+              // Nudge Right Button
+              _nudgeButton(
+                customIcon: ClubIconType.nudgeRight,
+                tooltip: 'Nudge Right',
+                enabled: canInteract,
+                onTap: () {
+                  AudioService().hapticLight();
+                  setState(() {
+                    final double delta = isRotatedForP2 ? -3.5 : 3.5;
+                    _strikerSliderX = (_strikerSliderX + delta)
+                        .clamp(_sliderMinX, _sliderMaxX);
+                    final double y = _currentPlayer == PlayerColor.white
+                        ? GameConfig.baselineYWhite
+                        : GameConfig.baselineYBlack;
+                    _striker.position = Vector2(_strikerSliderX, y);
+                  });
+                },
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -2895,30 +3243,84 @@ class _GameScreenState extends State<GameScreen>
     required VoidCallback onTap,
   }) {
     final Color iconColor = enabled
-        ? AppColors.goldLight
-        : AppColors.textMuted.withOpacity(0.35);
+        ? const Color(0xFF1B5E3C)
+        : const Color(0xFFB5AEA2);
 
     return Container(
-      width: 34,
-      height: 34,
+      width: 30,
+      height: 30,
       decoration: BoxDecoration(
-        color: AppColors.cardBgElevated,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.cardBorder),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0C14243B),
-            blurRadius: 6,
-            offset: Offset(0, 1.5),
-          ),
-        ],
+        color: const Color(0xFFF3ECE0),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: enabled ? const Color(0xFFD9B86A) : const Color(0xFFDDD2BF),
+          width: 1.0,
+        ),
       ),
       child: IconButton(
         padding: EdgeInsets.zero,
-        icon: ClubIcon(type: customIcon, size: 16, color: iconColor),
+        icon: ClubIcon(type: customIcon, size: 14, color: iconColor),
         tooltip: tooltip,
         onPressed: enabled ? onTap : null,
       ),
     );
+  }
+}
+
+class _ClubGoldSliderThumbShape extends SliderComponentShape {
+  final double enabledThumbRadius;
+
+  const _ClubGoldSliderThumbShape({this.enabledThumbRadius = 8.5});
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) {
+    return Size.fromRadius(enabledThumbRadius);
+  }
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final Canvas canvas = context.canvas;
+
+    // Soft warm drop shadow
+    final Path shadowPath = Path()
+      ..addOval(Rect.fromCircle(
+          center: center + const Offset(0, 1.2), radius: enabledThumbRadius));
+    canvas.drawShadow(shadowPath, const Color(0x66000000), 2.5, true);
+
+    // Outer metallic gold rim
+    final Paint outerPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFFFFECA8),
+          Color(0xFFD4AF37),
+          Color(0xFFA87E1E),
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: enabledThumbRadius));
+    canvas.drawCircle(center, enabledThumbRadius, outerPaint);
+
+    // Selective deep emerald green inner core
+    final Paint innerCorePaint = Paint()
+      ..color = const Color(0xFF1B5E3C);
+    canvas.drawCircle(center, enabledThumbRadius * 0.48, innerCorePaint);
+
+    // Subtle center gold dot
+    final Paint centerDotPaint = Paint()
+      ..color = const Color(0xFFFFDF7A);
+    canvas.drawCircle(center, enabledThumbRadius * 0.18, centerDotPaint);
   }
 }

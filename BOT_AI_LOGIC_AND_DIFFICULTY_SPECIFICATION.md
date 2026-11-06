@@ -1,8 +1,8 @@
 # 🤖 CARROM ZONE — BOT / CPU AI ENGINE & DIFFICULTY SPECIFICATION
 
 > **Document Version:** 2.2.0 (Pre-Match Difficulty Dialog & AI Balancing Edition)  
-> **Source Module:** [`lib/ai/carrom_ai.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/ai/carrom_ai.dart)  
-> **Supporting Modules:** [`lib/core/carrom_rule_engine.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/carrom_rule_engine.dart), [`lib/core/turn_timer_controller.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/core/turn_timer_controller.dart), [`lib/screens/game_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/game_screen.dart), [`lib/screens/menu_screen.dart`](file:///c:/Users/Entire/Downloads/CarromMaster-main/CarromMaster-main/lib/screens/menu_screen.dart)  
+> **Source Module:** [`lib/ai/carrom_ai.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/ai/carrom_ai.dart)  
+> **Supporting Modules:** [`lib/core/carrom_rule_engine.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/core/carrom_rule_engine.dart), [`lib/core/turn_timer_controller.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/core/turn_timer_controller.dart), [`lib/screens/game_screen.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/game_screen.dart), [`lib/screens/menu_screen.dart`](file:///c:/Users/Entire/Downloads/carrom_zone/lib/screens/menu_screen.dart)  
 > **Engine:** Deterministic 2D Physics-Based Predictive AI  
 > **Supported Rulesets:** Classic Carrom (Casual Points) & Freestyle Points Mode  
 > **Supported Difficulties:** Easy (Novice), Medium (Club Player), Hard (Tournament Pro)  

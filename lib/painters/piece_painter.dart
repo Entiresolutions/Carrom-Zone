@@ -340,16 +340,36 @@ class PiecePainter extends CustomPainter {
         ..strokeWidth = 1.4 * shrink,
     );
 
-    // 4. Center 8-point Gold Star Emblem
-    _drawCompassStar(
-      canvas,
-      pos,
-      style.queenStarPoints,
-      r * 0.44,
-      r * 0.20,
-      style.queenStarColor,
-      shrink,
-    );
+    // 4. Center Emblem (omitted for Classic Birch to maintain authentic solid red disc)
+    if (theme != BoardThemeType.mahogany) {
+      _drawCompassStar(
+        canvas,
+        pos,
+        style.queenStarPoints,
+        r * 0.44,
+        r * 0.20,
+        style.queenStarColor,
+        shrink,
+      );
+    } else {
+      // Classic minimal concentric rings
+      canvas.drawCircle(
+        pos,
+        r * 0.58,
+        Paint()
+          ..color = style.queenOuterRing.withOpacity(0.70 * shrink)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2 * shrink,
+      );
+      canvas.drawCircle(
+        pos,
+        r * 0.35,
+        Paint()
+          ..color = style.queenOuterRing.withOpacity(0.65 * shrink)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.9 * shrink,
+      );
+    }
 
     // 5. Center Royal Pip & gold collar
     canvas.drawCircle(
@@ -482,23 +502,48 @@ class PiecePainter extends CustomPainter {
           ..strokeWidth = 1.3 * shrink,
       );
 
-      // 9. Center theme-specific medallion emblem
-      _drawStrikerEmblem(canvas, pos, r, shrink, style);
+      // 9. Center emblem & details (omitted for Classic Birch to maintain authentic clean ivory striker)
+      if (theme != BoardThemeType.mahogany) {
+        _drawStrikerEmblem(canvas, pos, r, shrink, style);
 
-      // 10. Center jewel core pip & metal collar
-      canvas.drawCircle(
-        pos,
-        2.8 * shrink,
-        Paint()..color = style.strikerGemCore.withOpacity(0.95 * shrink),
-      );
-      canvas.drawCircle(
-        pos,
-        2.8 * shrink,
-        Paint()
-          ..color = style.strikerGemRim.withOpacity(0.95 * shrink)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.9 * shrink,
-      );
+        // 10. Center jewel core pip & metal collar
+        canvas.drawCircle(
+          pos,
+          2.8 * shrink,
+          Paint()..color = style.strikerGemCore.withOpacity(0.95 * shrink),
+        );
+        canvas.drawCircle(
+          pos,
+          2.8 * shrink,
+          Paint()
+            ..color = style.strikerGemRim.withOpacity(0.95 * shrink)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.9 * shrink,
+        );
+      } else {
+        // Simple concentric inner ring & central aiming pip
+        canvas.drawCircle(
+          pos,
+          r * 0.34,
+          Paint()
+            ..color = style.strikerAccentRing.withOpacity(0.65 * shrink)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.0 * shrink,
+        );
+        canvas.drawCircle(
+          pos,
+          r * 0.11,
+          Paint()..color = style.strikerGemCore.withOpacity(0.80 * shrink),
+        );
+        canvas.drawCircle(
+          pos,
+          r * 0.11,
+          Paint()
+            ..color = style.strikerOuterRim.withOpacity(0.50 * shrink)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.8 * shrink,
+        );
+      }
 
       // 11. Idle specular glint sweep around bezel
       _drawStrikerIdleGleam(canvas, pos, r, shrink, style);

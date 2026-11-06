@@ -22,8 +22,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _hapticsEnabled = true;
   AiDifficulty _difficulty = AiDifficulty.medium;
   BoardThemeType _theme = BoardThemeType.mahogany;
-  bool _aimGuideEnabled = true;
-  int _strikerControlIndex = 0; // 0: Slider, 1: Drag
 
   @override
   void initState() {
@@ -36,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _onSfxChanged(bool val) {
+    AudioService().playUiTouch();
     setState(() => _sfxEnabled = val);
     AudioService().sfxEnabled = val;
     StorageService().setSfxEnabled(val);
@@ -43,6 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _onMusicChanged(bool val) {
+    AudioService().playUiTouch();
     setState(() => _musicEnabled = val);
     AudioService().musicEnabled = val;
     StorageService().setMusicEnabled(val);
@@ -54,6 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _onHapticsChanged(bool val) {
+    AudioService().playUiTouch();
     setState(() => _hapticsEnabled = val);
     AudioService().hapticsEnabled = val;
     StorageService().setHapticsEnabled(val);
@@ -776,102 +777,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
-              const Divider(
-                  height: 1,
-                  indent: 64,
-                  endIndent: 16,
-                  color: Color(0xFFEDE5D6)),
-
-              // Aim Trajectory Line
-              _settingToggleRow(
-                icon: Icons.call_made_rounded,
-                title: 'Aim Trajectory Line',
-                subtitle: 'Show shot angle & rebound guide',
-                value: _aimGuideEnabled,
-                onChanged: (v) {
-                  AudioService().hapticSelection();
-                  setState(() => _aimGuideEnabled = v);
-                },
-              ),
-              const Divider(
-                  height: 1,
-                  indent: 64,
-                  endIndent: 16,
-                  color: Color(0xFFEDE5D6)),
-
-              // Striker Control Style
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        _greenIconTile(Icons.linear_scale_rounded),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Striker Control Style',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF14243B),
-                                ),
-                              ),
-                              const SizedBox(height: 1),
-                              Text(
-                                'Baseline positioning interaction',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF7A6E5D),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // 2-Segment Selector: Slider vs Drag
-                    Container(
-                      height: 38,
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7F1E7),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: const Color(0xFFE5D5B8),
-                          width: 0.8,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          _segmentPill(
-                            title: 'Slider',
-                            isSelected: _strikerControlIndex == 0,
-                            onTap: () {
-                              AudioService().hapticSelection();
-                              setState(() => _strikerControlIndex = 0);
-                            },
-                          ),
-                          _segmentPill(
-                            title: 'Drag',
-                            isSelected: _strikerControlIndex == 1,
-                            onTap: () {
-                              AudioService().hapticSelection();
-                              setState(() => _strikerControlIndex = 1);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
@@ -907,21 +812,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFDF8),
-                  borderRadius: BorderRadius.circular(10),
-                  border:
-                      Border.all(color: const Color(0xFFE8D5B0), width: 0.8),
-                ),
-                child: Text(
-                  themeName,
-                  style: GoogleFonts.outfit(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF5A5245),
+              Flexible(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFDF8),
+                    borderRadius: BorderRadius.circular(10),
+                    border:
+                        Border.all(color: const Color(0xFFE8D5B0), width: 0.8),
+                  ),
+                  child: Text(
+                    themeName,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF5A5245),
+                    ),
                   ),
                 ),
               ),

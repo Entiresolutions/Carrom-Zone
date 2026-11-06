@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:carrom_master/screens/splash_screen.dart';
 
@@ -11,6 +12,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
+    GoogleFonts.config.allowRuntimeFetching = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('xyz.luan/audioplayers.global'),
@@ -53,14 +55,16 @@ void main() {
     // Capture rendered screenshot
     final boundary = repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary != null) {
-      final ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData != null) {
-        final out = File('C:/Users/Entire/.gemini/antigravity/brain/38ed6c08-0265-4f66-897c-e5eb770a993b/splash_rendered_preview.png');
-        await out.writeAsBytes(byteData.buffer.asUint8List());
-        // ignore: avoid_print
-        print('Captured splash screen preview at ${out.path}');
-      }
+      await tester.runAsync(() async {
+        final ui.Image image = await boundary.toImage(pixelRatio: 2.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData != null) {
+          final out = File('C:/Users/Entire/.gemini/antigravity/brain/38ed6c08-0265-4f66-897c-e5eb770a993b/splash_rendered_preview.png');
+          await out.writeAsBytes(byteData.buffer.asUint8List());
+          // ignore: avoid_print
+          print('Captured splash screen preview at ${out.path}');
+        }
+      });
     }
 
     // Clean up

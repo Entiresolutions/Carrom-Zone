@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/app_colors.dart';
@@ -19,15 +20,99 @@ class MenuScreen extends StatefulWidget {
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
-class _MenuScreenState extends State<MenuScreen> {
+class _MenuScreenState extends State<MenuScreen>
+    with SingleTickerProviderStateMixin {
   BoardThemeType _currentTheme = BoardThemeType.mahogany;
   AiDifficulty _currentDifficulty = AiDifficulty.medium;
   CarromRuleset _selectedRuleset = CarromRuleset.classic;
+
+  static bool _hasPlayedEntranceAnimation = false;
+  bool _entranceCompleted = false;
+  late final AnimationController _entranceController;
+  late final List<Animation<double>> _staggerAnimations;
 
   @override
   void initState() {
     super.initState();
     _loadPreferences();
+
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    );
+
+    _staggerAnimations = List.generate(7, (i) {
+      final double begin = (i * 75.0) / 850.0;
+      final double end = math.min(1.0, (i * 75.0 + 400.0) / 850.0);
+      return CurvedAnimation(
+        parent: _entranceController,
+        curve: Interval(begin, end, curve: Curves.easeOutCubic),
+      );
+    });
+
+    if (_hasPlayedEntranceAnimation) {
+      _entranceController.value = 1.0;
+      _entranceCompleted = true;
+    } else {
+      _hasPlayedEntranceAnimation = true;
+      _entranceController.forward().then((_) {
+        if (mounted && !_entranceCompleted) {
+          setState(() {
+            _entranceCompleted = true;
+          });
+        }
+      });
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ClubMotion.isReducedMotion(context)) {
+        _entranceController.value = 1.0;
+        if (!_entranceCompleted) {
+          setState(() {
+            _entranceCompleted = true;
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _entranceController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildStaggeredItem({
+    required int index,
+    required Widget child,
+  }) {
+    if (_entranceCompleted) {
+      return child;
+    }
+
+    final Animation<double> animation = _staggerAnimations[index];
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, staticChild) {
+        final double val = animation.value;
+        final double opacity = val.clamp(0.0, 1.0);
+        final double translateY = 20.0 * (1.0 - val);
+        final double scale = 0.96 + (0.04 * val);
+
+        return Opacity(
+          opacity: opacity,
+          child: Transform.translate(
+            offset: Offset(0.0, translateY),
+            child: Transform.scale(
+              scale: scale,
+              child: staticChild,
+            ),
+          ),
+        );
+      },
+      child: child,
+    );
   }
 
   void _loadPreferences() {
@@ -143,10 +228,13 @@ class _MenuScreenState extends State<MenuScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // 1. Large Centered 3D Carrom Zone Logo
-                          const Center(
-                            child: CarromZoneLogo(
-                              size: 195,
-                              showShadow: true,
+                          _buildStaggeredItem(
+                            index: 0,
+                            child: const Center(
+                              child: CarromZoneLogo(
+                                size: 195,
+                                showShadow: true,
+                              ),
                             ),
                           ),
                           // Test & semantic anchor for title and crest logo
@@ -166,82 +254,97 @@ class _MenuScreenState extends State<MenuScreen> {
                           const SizedBox(height: 12),
 
                           // 2. Compact Table Theme Preview Card
-                          ChampionshipThemeCard(
-                            theme: _currentTheme,
-                            isPremium: isThemePremium,
-                            onTap: _openThemeCollection,
+                          _buildStaggeredItem(
+                            index: 1,
+                            child: ChampionshipThemeCard(
+                              theme: _currentTheme,
+                              isPremium: isThemePremium,
+                              onTap: _openThemeCollection,
+                            ),
                           ),
                           const SizedBox(height: 12),
 
                           // 3. Game Mode Segmented Toggle (Classic Carrom vs Freestyle Points)
-                          ChampionshipSegmentedToggle(
-                            isClassic: !isFreestyle,
-                            onSelectClassic: () {
-                              if (isFreestyle) {
-                                AudioService().hapticSelection();
-                                setState(() =>
-                                    _selectedRuleset = CarromRuleset.classic);
-                              }
-                            },
-                            onSelectFreestyle: () {
-                              if (!isFreestyle) {
-                                AudioService().hapticSelection();
-                                setState(() =>
-                                    _selectedRuleset = CarromRuleset.freestyle);
-                              }
-                            },
+                          _buildStaggeredItem(
+                            index: 2,
+                            child: ChampionshipSegmentedToggle(
+                              isClassic: !isFreestyle,
+                              onSelectClassic: () {
+                                if (isFreestyle) {
+                                  AudioService().hapticSelection();
+                                  setState(() =>
+                                      _selectedRuleset = CarromRuleset.classic);
+                                }
+                              },
+                              onSelectFreestyle: () {
+                                if (!isFreestyle) {
+                                  AudioService().hapticSelection();
+                                  setState(() =>
+                                      _selectedRuleset = CarromRuleset.freestyle);
+                                }
+                              },
+                            ),
                           ),
                           const SizedBox(height: 12),
 
                           // 4. VS CPU
-                          ChampionshipModeCard(
-                            icon: const ClubIcon(
-                              type: ClubIconType.vsCpu,
-                              color: Colors.white,
-                              size: 24,
+                          _buildStaggeredItem(
+                            index: 3,
+                            child: ChampionshipModeCard(
+                              icon: const ClubIcon(
+                                type: ClubIconType.vsCpu,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                              title: 'VS CPU',
+                              subtitle: isFreestyle
+                                  ? 'Race CPU to 160 pts • Any coin counts'
+                                  : 'Test your tactical skills against AI',
+                              categoryTag: isFreestyle
+                                  ? 'FREESTYLE POINTS • 160 TARGET'
+                                  : 'SOLO PLAY • TACTICAL AI',
+                              badgeText: _currentDifficulty.name.toUpperCase(),
+                              onTap: _onVsCpuTap,
                             ),
-                            title: 'VS CPU',
-                            subtitle: isFreestyle
-                                ? 'Race CPU to 160 pts • Any coin counts'
-                                : 'Test your tactical skills against AI',
-                            categoryTag: isFreestyle
-                                ? 'FREESTYLE POINTS • 160 TARGET'
-                                : 'SOLO PLAY • TACTICAL AI',
-                            badgeText: _currentDifficulty.name.toUpperCase(),
-                            onTap: _onVsCpuTap,
                           ),
                           const SizedBox(height: 10),
 
                           // 5. PASS & PLAY
-                          ChampionshipModeCard(
-                            icon: const TwoPeopleIcon(
-                              size: 24,
-                              color: Colors.white,
+                          _buildStaggeredItem(
+                            index: 4,
+                            child: ChampionshipModeCard(
+                              icon: const TwoPeopleIcon(
+                                size: 24,
+                                color: Colors.white,
+                              ),
+                              title: 'PASS & PLAY',
+                              subtitle: isFreestyle
+                                  ? '2-Player Freestyle race to 160 pts'
+                                  : 'Turn-based tabletop match on 1 device',
+                              categoryTag: isFreestyle
+                                  ? 'LOCAL 2P • FREESTYLE 10/20/50'
+                                  : 'LOCAL MULTIPLAYER • 2 PLAYERS',
+                              onTap: () => _startGame(GameMode.passAndPlay),
                             ),
-                            title: 'PASS & PLAY',
-                            subtitle: isFreestyle
-                                ? '2-Player Freestyle race to 160 pts'
-                                : 'Turn-based tabletop match on 1 device',
-                            categoryTag: isFreestyle
-                                ? 'LOCAL 2P • FREESTYLE 10/20/50'
-                                : 'LOCAL MULTIPLAYER • 2 PLAYERS',
-                            onTap: () => _startGame(GameMode.passAndPlay),
                           ),
                           const SizedBox(height: 10),
 
                           // 6. PRACTICE ARENA
-                          ChampionshipModeCard(
-                            icon: const ClubIcon(
-                              type: ClubIconType.practice,
-                              color: Colors.white,
-                              size: 24,
+                          _buildStaggeredItem(
+                            index: 5,
+                            child: ChampionshipModeCard(
+                              icon: const ClubIcon(
+                                type: ClubIconType.practice,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                              hasNotificationDot: true,
+                              title: 'PRACTICE ARENA',
+                              subtitle:
+                                  'Freestyle board to master angles & tricks',
+                              categoryTag: 'SOLO MASTERY • UNTIMED',
+                              onTap: () => _startGame(GameMode.practice),
                             ),
-                            hasNotificationDot: true,
-                            title: 'PRACTICE ARENA',
-                            subtitle:
-                                'Freestyle board to master angles & tricks',
-                            categoryTag: 'SOLO MASTERY • UNTIMED',
-                            onTap: () => _startGame(GameMode.practice),
                           ),
                           const SizedBox(height: 6),
                         ],
@@ -249,10 +352,18 @@ class _MenuScreenState extends State<MenuScreen> {
                     ),
                   ),
 
-                  // 7. CRITICAL: Preserved Current Bottom Navigation Dock
+                  // 7. Premium Floating Bottom Navigation Dock
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
-                    child: _buildBottomNavigationDock(),
+                    padding: EdgeInsets.fromLTRB(
+                      18,
+                      4,
+                      18,
+                      math.max(12.0, MediaQuery.of(context).padding.bottom + 4.0),
+                    ),
+                    child: _buildStaggeredItem(
+                      index: 6,
+                      child: _buildBottomNavigationDock(),
+                    ),
                   ),
                 ],
               ),
@@ -265,26 +376,26 @@ class _MenuScreenState extends State<MenuScreen> {
 
   Widget _buildBottomNavigationDock() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFFFFDF9), Color(0xFFF7F1E7)],
+          colors: [Color(0xFFFFFDF8), Color(0xFFF7F1E6)],
         ),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: const Color(0xFFE2D6C3),
           width: 1.2,
         ),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x1414243B),
+            color: Color(0x1614243B),
             blurRadius: 18,
             offset: Offset(0, 5),
           ),
           BoxShadow(
-            color: Color(0xA0FFFFFF),
+            color: Color(0x80FFFFFF),
             blurRadius: 2,
             offset: Offset(0, -1),
           ),
@@ -297,13 +408,11 @@ class _MenuScreenState extends State<MenuScreen> {
             label: 'RULES',
             onTap: _openTutorial,
           ),
-          _dockDivider(),
           _DockNavButton(
             customIcon: ClubIconType.themes,
             label: 'THEMES',
             onTap: _openThemeCollection,
           ),
-          _dockDivider(),
           _DockNavButton(
             customIcon: ClubIconType.settings,
             label: 'SETTINGS',
@@ -311,15 +420,6 @@ class _MenuScreenState extends State<MenuScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _dockDivider() {
-    return Container(
-      width: 1,
-      height: 32,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: const Color(0x28D4C4AC),
     );
   }
 }
@@ -345,6 +445,14 @@ class _DockNavButtonState extends State<_DockNavButton> {
   @override
   Widget build(BuildContext context) {
     final bool reducedMotion = ClubMotion.isReducedMotion(context);
+
+    // Active/pressed: Deep emerald background with gold icon and subtle animation
+    // Unpressed: Transparent/subtle cream with deep emerald outline icon & gold warmth
+    final Color iconColor =
+        _pressed ? const Color(0xFFFFDF7A) : const Color(0xFF143022);
+    final Color labelColor =
+        _pressed ? const Color(0xFFFFE6A3) : const Color(0xFF1B3D2F);
+
     return Expanded(
       child: GestureDetector(
         onTapDown: (_) => setState(() => _pressed = true),
@@ -356,70 +464,60 @@ class _DockNavButtonState extends State<_DockNavButton> {
         onTapCancel: () => setState(() => _pressed = false),
         behavior: HitTestBehavior.opaque,
         child: AnimatedScale(
-          scale: (_pressed && !reducedMotion) ? 0.93 : 1.0,
-          duration: const Duration(milliseconds: 80),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          scale: (_pressed && !reducedMotion) ? 0.94 : 1.0,
+          duration: const Duration(milliseconds: 90),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+            decoration: BoxDecoration(
+              gradient: _pressed
+                  ? const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0xFF0F3D2E),
+                        Color(0xFF09281E),
+                      ],
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(18),
+              border: _pressed
+                  ? Border.all(
+                      color: const Color(0xFFD4AF37),
+                      width: 1.2,
+                    )
+                  : Border.all(
+                      color: Colors.transparent,
+                      width: 1.2,
+                    ),
+              boxShadow: _pressed
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x350F3D2E),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Luxury Ivory-Satin Button Container with Soft Depth
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 90),
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: _pressed
-                          ? const [Color(0xFFFFF9EE), Color(0xFFF7EACD)]
-                          : const [Color(0xFFFFFFFF), Color(0xFFF2EADC)],
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: _pressed
-                          ? const Color(0xFFD4AF37)
-                          : const Color(0xFFDDD2C0),
-                      width: _pressed ? 1.5 : 1.1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _pressed
-                            ? const Color(0x35D4AF37)
-                            : const Color(0x1014243B),
-                        blurRadius: _pressed ? 10 : 5,
-                        offset: const Offset(0, 2),
-                      ),
-                      const BoxShadow(
-                        color: Color(0x90FFFFFF),
-                        blurRadius: 1.5,
-                        offset: Offset(0, -1),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: ClubIcon(
-                      type: widget.customIcon,
-                      size: 24,
-                      color: _pressed
-                          ? const Color(0xFF8B6415)
-                          : const Color(0xFF14243B),
-                    ),
-                  ),
+                ClubIcon(
+                  type: widget.customIcon,
+                  size: 22,
+                  color: iconColor,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 3.5),
                 Text(
                   widget.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.outfit(
-                    fontSize: 10.5,
+                    fontSize: 10,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                    color: _pressed
-                        ? const Color(0xFF8B6415)
-                        : const Color(0xFF14243B),
+                    letterSpacing: 0.9,
+                    color: labelColor,
                   ),
                 ),
               ],
