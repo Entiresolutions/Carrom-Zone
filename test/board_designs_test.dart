@@ -116,20 +116,12 @@ void main() {
     test('4. All 11 theme thumbnails exist on disk and have high fidelity', () {
       for (final theme in BoardThemeType.values) {
         final String assetPath = AppColors.getThemeAsset(theme);
-        final String pngPath = assetPath.replaceAll('.webp', '.png');
-
         final File webpFile = File(assetPath);
-        final File pngFile = File(pngPath);
 
         expect(webpFile.existsSync(), isTrue,
             reason: 'Production asset $assetPath must exist');
-        expect(pngFile.existsSync(), isTrue,
-            reason: 'PNG asset $pngPath must exist');
-
         expect(webpFile.lengthSync(), greaterThan(20000),
             reason: '$assetPath must be a high-resolution production image');
-        expect(pngFile.lengthSync(), greaterThan(20000),
-            reason: '$pngPath must be a high-resolution production image');
       }
     });
   });

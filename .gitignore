@@ -1,3 +1,9 @@
+# Flutter / Dart build & cache
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+
 # Dependencies
 node_modules/
 

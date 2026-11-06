@@ -17,23 +17,18 @@ class PieceAssetService {
   static String _cacheKey(BoardThemeType theme, PieceType type) =>
       '${theme.name}_${type.name}';
 
-  /// Maps theme and piece type to its asset path in assets/images/pieces/{themeId}/{type}.png
+  /// Maps theme and piece type to its WebP asset path in assets/images/pieces/{themeId}/{type}.webp
   static String getPieceAsset(BoardThemeType theme, PieceType type) {
-    final String themeFolder = AppColors.getThemeAssetKey(theme);
-    final String pieceName = type == PieceType.queen
-        ? 'queen'
-        : (type == PieceType.white ? 'white' : 'black');
-    return 'assets/images/pieces/$themeFolder/$pieceName.png';
-  }
-
-  /// Maps theme and piece type to its WebP asset path
-  static String getPieceWebpAsset(BoardThemeType theme, PieceType type) {
     final String themeFolder = AppColors.getThemeAssetKey(theme);
     final String pieceName = type == PieceType.queen
         ? 'queen'
         : (type == PieceType.white ? 'white' : 'black');
     return 'assets/images/pieces/$themeFolder/$pieceName.webp';
   }
+
+  /// Alias for [getPieceAsset] returning the WebP asset path.
+  static String getPieceWebpAsset(BoardThemeType theme, PieceType type) =>
+      getPieceAsset(theme, type);
 
   /// Returns the preloaded [ui.Image] for the given theme and piece type, or null.
   ui.Image? getPiece(BoardThemeType theme, PieceType type) {

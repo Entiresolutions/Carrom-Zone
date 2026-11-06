@@ -464,18 +464,12 @@ void main() {
       }
     });
 
-    test('13. Striker Asset Completeness: All 11 themes have high-res PNG & WebP files on disk', () {
+    test('13. Striker Asset Completeness: All 11 themes have high-res WebP files on disk', () {
       for (final theme in BoardThemeType.values) {
-        final String pngPath = AppColors.getStrikerAsset(theme);
-        final String webpPath = pngPath.replaceAll('.png', '.webp');
-
-        final pngFile = File(pngPath);
+        final String webpPath = AppColors.getStrikerAsset(theme);
         final webpFile = File(webpPath);
 
-        expect(pngFile.existsSync(), isTrue, reason: 'PNG asset missing for ${theme.name} at $pngPath');
         expect(webpFile.existsSync(), isTrue, reason: 'WebP asset missing for ${theme.name} at $webpPath');
-
-        expect(pngFile.lengthSync(), greaterThan(100000), reason: 'PNG file size suspiciously small for ${theme.name}');
         expect(webpFile.lengthSync(), greaterThan(20000), reason: 'WebP file size suspiciously small for ${theme.name}');
       }
     });
@@ -541,23 +535,15 @@ void main() {
       recorder.endRecording();
     });
 
-    test('16. Piece Asset Completeness: All 33 pieces have high-res PNG & WebP files on disk', () {
+    test('16. Piece Asset Completeness: All 33 pieces have high-res WebP files on disk', () {
       int verifiedPieces = 0;
       for (final theme in BoardThemeType.values) {
         for (final type in [PieceType.white, PieceType.black, PieceType.queen]) {
-          final String pngPath = PieceAssetService.getPieceAsset(theme, type);
-          final String webpPath = PieceAssetService.getPieceWebpAsset(theme, type);
-
-          final pngFile = File(pngPath);
+          final String webpPath = PieceAssetService.getPieceAsset(theme, type);
           final webpFile = File(webpPath);
 
-          expect(pngFile.existsSync(), isTrue,
-              reason: 'PNG piece missing for ${theme.name} ${type.name} at $pngPath');
           expect(webpFile.existsSync(), isTrue,
               reason: 'WebP piece missing for ${theme.name} ${type.name} at $webpPath');
-
-          expect(pngFile.lengthSync(), greaterThan(50000),
-              reason: 'PNG file size suspiciously small for ${theme.name} ${type.name}');
           expect(webpFile.lengthSync(), greaterThan(10000),
               reason: 'WebP file size suspiciously small for ${theme.name} ${type.name}');
 

@@ -11,7 +11,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.6
   audioplayers: ^6.8.1
   google_fonts: ^8.2.1
@@ -31,7 +30,6 @@ flutter:
     - assets/images/logo/
     - assets/images/themes/
     - assets/images/strikers/
-    - assets/images/pieces/
     - assets/images/pieces/mahogany/
     - assets/images/pieces/emerald/
     - assets/images/pieces/midnight/

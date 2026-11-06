@@ -309,27 +309,27 @@ class AppColors {
   static String getStrikerAsset(BoardThemeType theme) {
     switch (theme) {
       case BoardThemeType.mahogany:
-        return 'assets/images/strikers/striker_mahogany.png';
+        return 'assets/images/strikers/striker_mahogany.webp';
       case BoardThemeType.emerald:
-        return 'assets/images/strikers/striker_emerald.png';
+        return 'assets/images/strikers/striker_emerald.webp';
       case BoardThemeType.midnight:
-        return 'assets/images/strikers/striker_midnight.png';
+        return 'assets/images/strikers/striker_midnight.webp';
       case BoardThemeType.walnutClub:
-        return 'assets/images/strikers/striker_walnut_club.png';
+        return 'assets/images/strikers/striker_walnut_club.webp';
       case BoardThemeType.royalIndigo:
-        return 'assets/images/strikers/striker_royal_indigo.png';
+        return 'assets/images/strikers/striker_royal_indigo.webp';
       case BoardThemeType.emeraldLounge:
-        return 'assets/images/strikers/striker_emerald_lounge.png';
+        return 'assets/images/strikers/striker_emerald_lounge.webp';
       case BoardThemeType.oceanBreeze:
-        return 'assets/images/strikers/striker_ocean_breeze.png';
+        return 'assets/images/strikers/striker_ocean_breeze.webp';
       case BoardThemeType.sakuraStudio:
-        return 'assets/images/strikers/striker_sakura_studio.png';
+        return 'assets/images/strikers/striker_sakura_studio.webp';
       case BoardThemeType.neonArena:
-        return 'assets/images/strikers/striker_neon_arena.png';
+        return 'assets/images/strikers/striker_neon_arena.webp';
       case BoardThemeType.goldenPalace:
-        return 'assets/images/strikers/striker_golden_palace.png';
+        return 'assets/images/strikers/striker_golden_palace.webp';
       case BoardThemeType.cosmicElite:
-        return 'assets/images/strikers/striker_cosmic_elite.png';
+        return 'assets/images/strikers/striker_cosmic_elite.webp';
     }
   }
 
