@@ -381,12 +381,12 @@ void main() {
           home: GameScreen(gameMode: GameMode.passAndPlay),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('Player 2'), findsOneWidget);
 
       // Unmount before switching mode
       await tester.pumpWidget(const SizedBox());
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
 
       // Practice Mode
       await tester.pumpWidget(
@@ -394,12 +394,12 @@ void main() {
           home: GameScreen(gameMode: GameMode.practice),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('Target'), findsOneWidget);
 
       // Clean unmount
       await tester.pumpWidget(const SizedBox());
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
       await tester.binding.setSurfaceSize(null);
     });
 

@@ -73,7 +73,10 @@ void main() {
           final ui.Image image = await boundary.toImage(pixelRatio: 2.0);
           final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
           if (byteData != null) {
-            final out = File('C:/Users/Entire/.gemini/antigravity/brain/38ed6c08-0265-4f66-897c-e5eb770a993b/menu_with_bottom_nav_preview.png');
+            final out = File('build/test_previews/menu_with_bottom_nav_preview.png');
+            if (!out.parent.existsSync()) {
+              out.parent.createSync(recursive: true);
+            }
             await out.writeAsBytes(byteData.buffer.asUint8List());
             // ignore: avoid_print
             print('Saved menu preview with bottom nav to ${out.path}');
