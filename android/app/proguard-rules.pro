@@ -6,6 +6,9 @@
 -keep class io.flutter.**  { *; }
 -keep class io.flutter.plugins.**  { *; }
 
+# Flutter Deferred Components / Play Store Split Compat
+-dontwarn com.google.android.play.core.**
+
 # Audioplayers
 -dontwarn xyz.luan.audioplayers.**
 -keep class xyz.luan.audioplayers.** { *; }
