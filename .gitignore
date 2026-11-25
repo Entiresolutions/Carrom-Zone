@@ -24,10 +24,6 @@ Thumbs.db
 .env
 .env.local
 
-# Capacitor native projects (generated)
-ios/
-android/
-
 # Debug
 *.log
 npm-debug.log*
