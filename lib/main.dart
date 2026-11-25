@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/app_colors.dart';
 import 'screens/intro_screen.dart';
+import 'services/ad_manager.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +24,9 @@ void main() {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
+  // Initialize AdMob SDK & preload ads asynchronously without blocking first frame
+  unawaited(AdManager().initialize());
 
   runApp(const CarromMasterApp());
 }

@@ -5,6 +5,7 @@ import '../core/app_colors.dart';
 import '../core/championship_widgets.dart';
 import '../core/design_system.dart';
 import '../models/game_mode.dart';
+import '../services/ad_manager.dart';
 import '../services/audio_service.dart';
 import '../services/storage_service.dart';
 import '../services/theme_service.dart';
@@ -28,6 +29,7 @@ class _MenuScreenState extends State<MenuScreen>
 
   static bool _hasPlayedEntranceAnimation = false;
   bool _entranceCompleted = false;
+  bool _isAdTransitionPending = false;
   late final AnimationController _entranceController;
   late final List<Animation<double>> _staggerAnimations;
 
@@ -121,26 +123,35 @@ class _MenuScreenState extends State<MenuScreen>
   }
 
   void _startGame(GameMode mode, {AiDifficulty? difficulty}) {
+    if (_isAdTransitionPending) return;
+    _isAdTransitionPending = true;
     AudioService().hapticSelection();
     final bool reducedMotion = ClubMotion.isReducedMotion(context);
     final CarromRuleset effectiveRuleset =
         mode == GameMode.practice ? CarromRuleset.classic : _selectedRuleset;
-    Navigator.of(context)
-        .push(
-      ClubPageRoute(
-        page: GameScreen(
-          gameMode: mode,
-          ruleset: effectiveRuleset,
-          difficulty: difficulty ?? _currentDifficulty,
-        ),
-        reducedMotion: reducedMotion,
-      ),
-    )
-        .then((_) {
-      if (mounted) {
-        setState(_loadPreferences);
-      }
-    });
+
+    AdManager().showInterstitial(
+      onComplete: () {
+        _isAdTransitionPending = false;
+        if (!mounted) return;
+        Navigator.of(context)
+            .push(
+          ClubPageRoute(
+            page: GameScreen(
+              gameMode: mode,
+              ruleset: effectiveRuleset,
+              difficulty: difficulty ?? _currentDifficulty,
+            ),
+            reducedMotion: reducedMotion,
+          ),
+        )
+            .then((_) {
+          if (mounted) {
+            setState(_loadPreferences);
+          }
+        });
+      },
+    );
   }
 
   void _onVsCpuTap() {
@@ -172,20 +183,29 @@ class _MenuScreenState extends State<MenuScreen>
   }
 
   void _openSettings() {
+    if (_isAdTransitionPending) return;
+    _isAdTransitionPending = true;
     AudioService().hapticSelection();
     final bool reducedMotion = ClubMotion.isReducedMotion(context);
-    Navigator.of(context)
-        .push(
-      ClubPageRoute(
-        page: const SettingsScreen(),
-        reducedMotion: reducedMotion,
-      ),
-    )
-        .then((_) {
-      if (mounted) {
-        setState(_loadPreferences);
-      }
-    });
+
+    AdManager().showInterstitial(
+      onComplete: () {
+        _isAdTransitionPending = false;
+        if (!mounted) return;
+        Navigator.of(context)
+            .push(
+          ClubPageRoute(
+            page: const SettingsScreen(),
+            reducedMotion: reducedMotion,
+          ),
+        )
+            .then((_) {
+          if (mounted) {
+            setState(_loadPreferences);
+          }
+        });
+      },
+    );
   }
 
   void _openThemeCollection() {
@@ -209,6 +229,8 @@ class _MenuScreenState extends State<MenuScreen>
   Widget build(BuildContext context) {
     final bool isFreestyle = _selectedRuleset == CarromRuleset.freestyle;
     final bool isThemePremium = ThemeService().isThemePremium(_currentTheme);
+    final bool isThemeRewarded = ThemeService().isThemeRewarded(_currentTheme);
+    final String? themeBadgeOverride = isThemeRewarded ? 'UNLOCKED' : null;
 
     return Scaffold(
       body: ClubBackground(
@@ -259,6 +281,7 @@ class _MenuScreenState extends State<MenuScreen>
                             child: ChampionshipThemeCard(
                               theme: _currentTheme,
                               isPremium: isThemePremium,
+                              tierBadgeText: themeBadgeOverride,
                               onTap: _openThemeCollection,
                             ),
                           ),
@@ -529,24 +552,27 @@ class _DockNavButtonState extends State<_DockNavButton> {
   }
 }
 
-class _DifficultySelectionDialog extends StatefulWidget {
+typedef _DifficultySelectionDialog = DifficultySelectionDialog;
+
+class DifficultySelectionDialog extends StatefulWidget {
   final AiDifficulty currentDifficulty;
   final CarromRuleset ruleset;
   final ValueChanged<AiDifficulty> onDifficultyChosen;
 
-  const _DifficultySelectionDialog({
+  const DifficultySelectionDialog({
+    super.key,
     required this.currentDifficulty,
     required this.ruleset,
     required this.onDifficultyChosen,
   });
 
   @override
-  State<_DifficultySelectionDialog> createState() =>
+  State<DifficultySelectionDialog> createState() =>
       _DifficultySelectionDialogState();
 }
 
 class _DifficultySelectionDialogState
-    extends State<_DifficultySelectionDialog> {
+    extends State<DifficultySelectionDialog> {
   late AiDifficulty _selected;
 
   @override
@@ -558,15 +584,27 @@ class _DifficultySelectionDialogState
   @override
   Widget build(BuildContext context) {
     final bool isFreestyle = widget.ruleset == CarromRuleset.freestyle;
+    final mediaQuery = MediaQuery.of(context);
+    final double screenHeight = mediaQuery.size.height;
+    final double screenWidth = mediaQuery.size.width;
+    final bool isCompactHeight = screenHeight < 720;
+    final bool isVeryCompactHeight = screenHeight < 580;
+    final bool isCompactWidth = screenWidth < 380;
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isCompactWidth ? 14 : 20,
+        vertical: isVeryCompactHeight ? 10 : (isCompactHeight ? 16 : 24),
+      ),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 390),
+        constraints: BoxConstraints(
+          maxWidth: 390,
+          maxHeight: screenHeight * 0.92,
+        ),
         decoration: BoxDecoration(
           color: const Color(0xFFFFFDF8),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(isCompactHeight ? 20 : 24),
           border: Border.all(
             color: const Color(0xFFD9B86A).withOpacity(0.65),
             width: 1.5,
@@ -584,7 +622,10 @@ class _DifficultySelectionDialogState
             ),
           ],
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+        padding: EdgeInsets.symmetric(
+          horizontal: isCompactWidth ? 16 : 20,
+          vertical: isVeryCompactHeight ? 12 : (isCompactHeight ? 16 : 22),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -593,8 +634,8 @@ class _DifficultySelectionDialogState
             Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: isCompactHeight ? 38 : 44,
+                  height: isCompactHeight ? 38 : 44,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       begin: Alignment.topLeft,
@@ -604,7 +645,7 @@ class _DifficultySelectionDialogState
                         Color(0xFF13452B),
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(isCompactHeight ? 11 : 13),
                     border: Border.all(
                       color: const Color(0xFFD9B86A).withOpacity(0.60),
                       width: 1.2,
@@ -617,10 +658,10 @@ class _DifficultySelectionDialogState
                       ),
                     ],
                   ),
-                  child: const Center(
+                  child: Center(
                     child: ClubIcon(
                       type: ClubIconType.vsCpu,
-                      size: 22,
+                      size: isCompactHeight ? 19 : 22,
                       color: Colors.white,
                     ),
                   ),
@@ -632,8 +673,10 @@ class _DifficultySelectionDialogState
                     children: [
                       Text(
                         'CHOOSE DIFFICULTY',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.cinzel(
-                          fontSize: 17,
+                          fontSize: isCompactWidth ? 15.0 : (isCompactHeight ? 16.0 : 17.0),
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF12261B),
                           letterSpacing: 0.8,
@@ -644,8 +687,10 @@ class _DifficultySelectionDialogState
                         isFreestyle
                             ? 'Freestyle Points · Race to 160'
                             : 'Classic Carrom · Casual Points',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
-                          fontSize: 12,
+                          fontSize: isCompactWidth ? 11.0 : 12.0,
                           color: const Color(0xFF7A6A55),
                           fontWeight: FontWeight.w500,
                         ),
@@ -684,56 +729,70 @@ class _DifficultySelectionDialogState
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: isVeryCompactHeight ? 8 : (isCompactHeight ? 10 : 16)),
             const Divider(color: Color(0xFFEDE5D5), height: 1),
-            const SizedBox(height: 14),
+            SizedBox(height: isVeryCompactHeight ? 8 : (isCompactHeight ? 10 : 14)),
 
-            // Difficulty Cards (Easy, Medium, Hard)
-            _difficultyOptionCard(
-              difficulty: AiDifficulty.easy,
-              title: 'EASY',
-              tierLabel: 'NOVICE',
-              badgeBg: const Color(0xFFEAF5EE),
-              badgeBorder: const Color(0xFF9FD4B3),
-              badgeText: const Color(0xFF1B6A45),
-              selectedBadgeBg: const Color(0xFF1F5C3E),
-              selectedBadgeBorder: const Color(0xFF6ED19F),
-              selectedBadgeText: const Color(0xFFB4F3D0),
-              description: 'Simple direct shots • Relaxed play • Beatable',
-              statLabel: 'Direct pots only • Cushion banks disabled',
-            ),
-            const SizedBox(height: 10),
-            _difficultyOptionCard(
-              difficulty: AiDifficulty.medium,
-              title: 'MEDIUM',
-              tierLabel: 'CLUB PLAYER',
-              badgeBg: const Color(0xFFFFF6E5),
-              badgeBorder: const Color(0xFFE5C378),
-              badgeText: const Color(0xFFA37820),
-              selectedBadgeBg: const Color(0xFF574112),
-              selectedBadgeBorder: const Color(0xFFD9B86A),
-              selectedBadgeText: const Color(0xFFFFE6A0),
-              description: 'Balanced accuracy • Moderate challenge',
-              statLabel: 'Standard cuts • Limited cushion bank shots',
-            ),
-            const SizedBox(height: 10),
-            _difficultyOptionCard(
-              difficulty: AiDifficulty.hard,
-              title: 'HARD',
-              tierLabel: 'TOURNAMENT PRO',
-              badgeBg: const Color(0xFFFDECEB),
-              badgeBorder: const Color(0xFFF2A4A0),
-              badgeText: const Color(0xFFC0392B),
-              selectedBadgeBg: const Color(0xFF5A1F1E),
-              selectedBadgeBorder: const Color(0xFFF29B96),
-              selectedBadgeText: const Color(0xFFFFCBC7),
-              description: 'Tournament sharpness • Pro tactical defense',
-              statLabel: 'Thin cut angles • Full cushion bank repertoire',
+            // Difficulty Cards (Easy, Medium, Hard) inside a Flexible scrollable area
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _difficultyOptionCard(
+                      difficulty: AiDifficulty.easy,
+                      title: 'EASY',
+                      tierLabel: 'NOVICE',
+                      badgeBg: const Color(0xFFEAF5EE),
+                      badgeBorder: const Color(0xFF9FD4B3),
+                      badgeText: const Color(0xFF1B6A45),
+                      selectedBadgeBg: const Color(0xFF1F5C3E),
+                      selectedBadgeBorder: const Color(0xFF6ED19F),
+                      selectedBadgeText: const Color(0xFFB4F3D0),
+                      description: 'Simple direct shots • Relaxed play • Beatable',
+                      statLabel: 'Direct pots only • Cushion banks disabled',
+                      isCompact: isCompactHeight,
+                    ),
+                    SizedBox(height: isVeryCompactHeight ? 6 : (isCompactHeight ? 8 : 10)),
+                    _difficultyOptionCard(
+                      difficulty: AiDifficulty.medium,
+                      title: 'MEDIUM',
+                      tierLabel: 'CLUB PLAYER',
+                      badgeBg: const Color(0xFFFFF6E5),
+                      badgeBorder: const Color(0xFFE5C378),
+                      badgeText: const Color(0xFFA37820),
+                      selectedBadgeBg: const Color(0xFF574112),
+                      selectedBadgeBorder: const Color(0xFFD9B86A),
+                      selectedBadgeText: const Color(0xFFFFE6A0),
+                      description: 'Balanced accuracy • Moderate challenge',
+                      statLabel: 'Standard cuts • Limited cushion bank shots',
+                      isCompact: isCompactHeight,
+                    ),
+                    SizedBox(height: isVeryCompactHeight ? 6 : (isCompactHeight ? 8 : 10)),
+                    _difficultyOptionCard(
+                      difficulty: AiDifficulty.hard,
+                      title: 'HARD',
+                      tierLabel: 'TOURNAMENT PRO',
+                      badgeBg: const Color(0xFFFDECEB),
+                      badgeBorder: const Color(0xFFF2A4A0),
+                      badgeText: const Color(0xFFC0392B),
+                      selectedBadgeBg: const Color(0xFF5A1F1E),
+                      selectedBadgeBorder: const Color(0xFFF29B96),
+                      selectedBadgeText: const Color(0xFFFFCBC7),
+                      description: 'Tournament sharpness • Pro tactical defense',
+                      statLabel: 'Thin cut angles • Full cushion bank repertoire',
+                      isCompact: isCompactHeight,
+                    ),
+                  ],
+                ),
+              ),
             ),
 
-            const SizedBox(height: 18),
+            SizedBox(height: isVeryCompactHeight ? 10 : (isCompactHeight ? 12 : 18)),
 
-            // Start Match Button
+            // Start Match Button (pinned at bottom, never pushed off-screen)
             ChampionshipPressable(
               onTap: () {
                 AudioService().hapticSelection();
@@ -742,7 +801,7 @@ class _DifficultySelectionDialogState
               },
               borderRadius: BorderRadius.circular(16),
               child: Container(
-                height: 48,
+                height: isVeryCompactHeight ? 42 : (isCompactHeight ? 44 : 48),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
@@ -770,8 +829,8 @@ class _DifficultySelectionDialogState
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 22,
-                      height: 22,
+                      width: isCompactHeight ? 20 : 22,
+                      height: isCompactHeight ? 20 : 22,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Colors.white.withOpacity(0.18),
@@ -780,10 +839,10 @@ class _DifficultySelectionDialogState
                           width: 1.0,
                         ),
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Icon(
                           Icons.play_arrow_rounded,
-                          size: 15,
+                          size: isCompactHeight ? 13 : 15,
                           color: Colors.white,
                         ),
                       ),
@@ -795,7 +854,7 @@ class _DifficultySelectionDialogState
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
-                          fontSize: 13.5,
+                          fontSize: isCompactWidth ? 12.5 : (isCompactHeight ? 13.0 : 13.5),
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                           letterSpacing: 0.6,
@@ -830,6 +889,7 @@ class _DifficultySelectionDialogState
     required Color selectedBadgeText,
     required String description,
     required String statLabel,
+    bool isCompact = false,
   }) {
     final bool isSelected = _selected == difficulty;
 
@@ -848,7 +908,10 @@ class _DifficultySelectionDialogState
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeInOut,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 12 : 14,
+              vertical: isCompact ? 8 : 11,
+            ),
             decoration: BoxDecoration(
               gradient: isSelected
                   ? const LinearGradient(
@@ -890,8 +953,8 @@ class _DifficultySelectionDialogState
                 // Radio indicator
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  width: 20,
-                  height: 20,
+                  width: isCompact ? 18 : 20,
+                  height: isCompact ? 18 : 20,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
@@ -907,8 +970,8 @@ class _DifficultySelectionDialogState
                   child: isSelected
                       ? Center(
                           child: Container(
-                            width: 8,
-                            height: 8,
+                            width: isCompact ? 7 : 8,
+                            height: isCompact ? 7 : 8,
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                               color: Color(0xFFF7D97B),
@@ -917,7 +980,7 @@ class _DifficultySelectionDialogState
                         )
                       : null,
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: isCompact ? 10 : 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -927,7 +990,7 @@ class _DifficultySelectionDialogState
                           Text(
                             title,
                             style: GoogleFonts.outfit(
-                              fontSize: 14.5,
+                              fontSize: isCompact ? 13.5 : 14.5,
                               fontWeight: FontWeight.w700,
                               color: isSelected
                                   ? Colors.white
@@ -936,41 +999,47 @@ class _DifficultySelectionDialogState
                             ),
                           ),
                           const SizedBox(width: 8),
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected ? selectedBadgeBg : badgeBg,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isSelected
-                                    ? selectedBadgeBorder
-                                    : badgeBorder,
-                                width: 0.9,
+                          Flexible(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isCompact ? 6 : 7,
+                                vertical: isCompact ? 1.5 : 2,
                               ),
-                            ),
-                            child: Text(
-                              tierLabel,
-                              style: GoogleFonts.outfit(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color: isSelected
-                                    ? selectedBadgeText
-                                    : badgeText,
-                                letterSpacing: 0.5,
+                              decoration: BoxDecoration(
+                                color: isSelected ? selectedBadgeBg : badgeBg,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? selectedBadgeBorder
+                                      : badgeBorder,
+                                  width: 0.9,
+                                ),
+                              ),
+                              child: Text(
+                                tierLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.outfit(
+                                  fontSize: isCompact ? 9.0 : 9.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isSelected
+                                      ? selectedBadgeText
+                                      : badgeText,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 3),
+                      SizedBox(height: isCompact ? 2 : 3),
                       Text(
                         description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
-                          fontSize: 11.5,
+                          fontSize: isCompact ? 11.0 : 11.5,
                           color: isSelected
                               ? const Color(0xFFD8EADE)
                               : const Color(0xFF12261B).withOpacity(0.80),
@@ -980,8 +1049,10 @@ class _DifficultySelectionDialogState
                       const SizedBox(height: 2),
                       Text(
                         statLabel,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
-                          fontSize: 10,
+                          fontSize: isCompact ? 9.5 : 10.0,
                           color: isSelected
                               ? const Color(0xFFB2D4BF)
                               : const Color(0xFF7A6A55),

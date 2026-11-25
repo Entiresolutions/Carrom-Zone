@@ -21,6 +21,7 @@ import '../painters/board_painter.dart';
 import '../painters/piece_painter.dart';
 import '../painters/aim_painter.dart';
 import '../painters/particle_painter.dart';
+import '../services/ad_manager.dart';
 import '../services/audio_service.dart';
 import '../services/piece_asset_service.dart';
 import '../services/storage_service.dart';
@@ -76,6 +77,7 @@ class _GameScreenState extends State<GameScreen>
   Timer? _toastTimer;
   bool _isPauseDialogShowing = false;
   bool _isGameOverDialogShowing = false;
+  bool _isResumingFromAd = false;
   double _simulatingDuration = 0.0;
   int _lastPowerTier = 0;
 
@@ -230,6 +232,8 @@ class _GameScreenState extends State<GameScreen>
       final ModalRoute<dynamic>? route = ModalRoute.of(context);
       final bool isCurrentRoute = route?.isCurrent ?? true;
       if (!_isPauseDialogShowing &&
+          !_isResumingFromAd &&
+          !AdManager().isShowingAd &&
           _stateMachine.isPaused &&
           mounted &&
           isCurrentRoute &&
@@ -365,8 +369,14 @@ class _GameScreenState extends State<GameScreen>
 
         if (!isStrikerCoin && !isCoinCoin) return;
 
-        if (impulse > 1.8) {
-          final double volScale = (impulse / 12.0).clamp(0.2, 1.0);
+        // Audible threshold: 0.35 impulse captures gentle touches and deflections,
+        // while ignoring imperceptible micro-vibrations between resting pieces.
+        if (impulse >= 0.35) {
+          // Progressive non-linear scaling: square-root curve ensures soft touches
+          // are clearly audible (~0.40 - 0.55), medium shots are solid (~0.65 - 0.80),
+          // and tournament power strikes reach full volume (1.0).
+          final double normalized = ((impulse - 0.35) / 8.0).clamp(0.0, 1.0);
+          final double volScale = 0.35 + 0.65 * math.sqrt(normalized);
           AudioService().playPieceCollision(volumeScale: volScale);
         }
       },
@@ -402,6 +412,7 @@ class _GameScreenState extends State<GameScreen>
           ? 'FOUL -${GameConfig.freestyleFoulPenalty}'
           : 'FOUL -1';
       _turnResult.pocketedStriker = true;
+      AudioService().playPocket();
       AudioService().playFoul();
       _spawnStrikerPocketFoulVfx(pocket);
     } else if (piece.type == PieceType.white) {
@@ -439,6 +450,7 @@ class _GameScreenState extends State<GameScreen>
           ? 'FOUL -${GameConfig.freestyleFoulPenalty}'
           : 'FOUL -1';
       _turnResult.pocketedStriker = true;
+      AudioService().playPocket();
       AudioService().playFoul();
       _spawnStrikerPocketFoulVfx(pocket);
     }
@@ -892,22 +904,25 @@ class _GameScreenState extends State<GameScreen>
   }
 
   double _findValidStrikerX(double preferredX, double baselineY) {
-    if (_isPositionClearForStriker(Vector2(preferredX, baselineY))) {
+    if (_isPositionClearForStriker(Vector2(preferredX, baselineY)) &&
+        GameConfig.isStrikerPositionWithinBounds(Vector2(preferredX, baselineY))) {
       return preferredX;
     }
-    for (double dx = 5.0; dx <= 60.0; dx += 5.0) {
+    for (double dx = 5.0; dx <= 120.0; dx += 5.0) {
       final double rightX = preferredX + dx;
       if (rightX <= _sliderMaxX &&
-          _isPositionClearForStriker(Vector2(rightX, baselineY))) {
+          _isPositionClearForStriker(Vector2(rightX, baselineY)) &&
+          GameConfig.isStrikerPositionWithinBounds(Vector2(rightX, baselineY))) {
         return rightX;
       }
       final double leftX = preferredX - dx;
       if (leftX >= _sliderMinX &&
-          _isPositionClearForStriker(Vector2(leftX, baselineY))) {
+          _isPositionClearForStriker(Vector2(leftX, baselineY)) &&
+          GameConfig.isStrikerPositionWithinBounds(Vector2(leftX, baselineY))) {
         return leftX;
       }
     }
-    return preferredX;
+    return preferredX.clamp(_sliderMinX, _sliderMaxX);
   }
 
   bool _isStrikerPlacementValid() {
@@ -920,6 +935,10 @@ class _GameScreenState extends State<GameScreen>
         ? GameConfig.baselineYWhite
         : GameConfig.baselineYBlack;
     if ((_striker.position.y - expectedY).abs() > 0.5) {
+      return false;
+    }
+
+    if (!GameConfig.isStrikerPositionWithinBounds(_striker.position)) {
       return false;
     }
 
@@ -1345,41 +1364,53 @@ class _GameScreenState extends State<GameScreen>
                 winner == PlayerColor.white) ||
             widget.gameMode == GameMode.practice);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => GameOverDialog(
-        matchOutcome: outcome,
-        winner: winner,
-        whiteScore: outcome.whiteScore,
-        blackScore: outcome.blackScore,
-        whiteRemaining: outcome.whiteRemaining,
-        blackRemaining: outcome.blackRemaining,
-        queenCoveredBy: outcome.queenCoveredBy,
-        gameMode: widget.gameMode,
-        ruleset: widget.ruleset,
-        targetScore: widget.targetScore,
-        isHumanWinner: isHumanWinner,
-        matchId: '${widget.gameMode.name}_${DateTime.now().millisecondsSinceEpoch}',
-        onRematch: () {
-          Navigator.of(ctx).pop();
-          setState(() {
-            _initGame();
-            _lastElapsed = null;
-            if (_gameLoopTicker != null && !_gameLoopTicker!.isTicking) {
-              _gameLoopTicker!.start();
-            }
-            AudioService().setGameplayActive(true);
-            AudioService().hapticTurnChange();
-          });
-        },
-        onMainMenu: () {
-          _isGameOverDialogShowing = false;
-          AudioService().setGameplayActive(false);
-          Navigator.of(ctx).pop();
-          Navigator.of(context).pop();
-        },
-      ),
+    AdManager().showInterstitial(
+      onComplete: () {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => GameOverDialog(
+            matchOutcome: outcome,
+            winner: winner,
+            whiteScore: outcome.whiteScore,
+            blackScore: outcome.blackScore,
+            whiteRemaining: outcome.whiteRemaining,
+            blackRemaining: outcome.blackRemaining,
+            queenCoveredBy: outcome.queenCoveredBy,
+            gameMode: widget.gameMode,
+            ruleset: widget.ruleset,
+            targetScore: widget.targetScore,
+            isHumanWinner: isHumanWinner,
+            matchId:
+                '${widget.gameMode.name}_${DateTime.now().millisecondsSinceEpoch}',
+            onRematch: () {
+              Navigator.of(ctx).pop();
+              AdManager().showInterstitial(
+                onComplete: () {
+                  if (!mounted) return;
+                  setState(() {
+                    _initGame();
+                    _lastElapsed = null;
+                    if (_gameLoopTicker != null &&
+                        !_gameLoopTicker!.isTicking) {
+                      _gameLoopTicker!.start();
+                    }
+                    AudioService().setGameplayActive(true);
+                    AudioService().hapticTurnChange();
+                  });
+                },
+              );
+            },
+            onMainMenu: () {
+              _isGameOverDialogShowing = false;
+              AudioService().setGameplayActive(false);
+              Navigator.of(ctx).pop();
+              Navigator.of(context).pop();
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -2075,7 +2106,15 @@ class _GameScreenState extends State<GameScreen>
         return;
       }
       if (mounted && _stateMachine.currentState == GameState.paused) {
-        _resumeGame();
+        _isResumingFromAd = true;
+        AdManager().showInterstitial(
+          onComplete: () {
+            _isResumingFromAd = false;
+            if (mounted && _stateMachine.currentState == GameState.paused) {
+              _resumeGame();
+            }
+          },
+        );
       }
     });
   }

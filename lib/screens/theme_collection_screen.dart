@@ -4,6 +4,7 @@ import '../core/app_colors.dart';
 import '../core/design_system.dart';
 import '../core/dev_options.dart';
 import '../models/piece_model.dart';
+import '../services/ad_manager.dart';
 import '../services/audio_service.dart';
 import '../services/piece_asset_service.dart';
 import '../services/storage_service.dart';
@@ -20,6 +21,8 @@ class ThemeCollectionScreen extends StatefulWidget {
 
 class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
   late BoardThemeType _selectedTheme;
+  BoardThemeType? _loadingRewardedTheme;
+  bool _isSwitchingTheme = false;
 
   @override
   void initState() {
@@ -31,40 +34,38 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
     _selectedTheme = StorageService().getBoardTheme();
   }
 
-  void _selectTheme(ThemeCatalogItem item) {
-    if (!item.isUnlocked) {
-      AudioService().hapticSelection();
-      _showPurchaseUnavailableDialog(item);
-      return;
-    }
-
-    AudioService().hapticSelection();
-    AudioService().playHit();
-    StorageService().setBoardTheme(item.theme);
-    setState(() {
-      _selectedTheme = item.theme;
-    });
-
+  void _showClubSnackbar(
+    String message, {
+    IconData icon = Icons.check_circle_rounded,
+    bool isWarning = false,
+  }) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF14243B),
+        backgroundColor:
+            isWarning ? const Color(0xFF3E1C1A) : const Color(0xFF14243B),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFFD6B24E), width: 1.2),
+          side: BorderSide(
+            color:
+                isWarning ? const Color(0xFFE57373) : const Color(0xFFD6B24E),
+            width: 1.2,
+          ),
         ),
         content: Row(
           children: [
-            const Icon(
-              Icons.check_circle_rounded,
+            Icon(
+              icon,
               size: 20,
-              color: Color(0xFFD6B24E),
+              color:
+                  isWarning ? const Color(0xFFFFB4AB) : const Color(0xFFD6B24E),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                '${item.name} activated for play!',
+                message,
                 style: GoogleFonts.outfit(
                   color: const Color(0xFFFAF6EF),
                   fontSize: 13,
@@ -74,8 +75,118 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
             ),
           ],
         ),
-        duration: const Duration(seconds: 2),
+        duration: Duration(seconds: isWarning ? 3 : 2),
       ),
+    );
+  }
+
+  Future<void> _equipUnlockedTheme(
+    ThemeCatalogItem item, {
+    String? customToast,
+    bool playWinChime = false,
+  }) async {
+    final bool equipped = await StorageService().setBoardTheme(item.theme);
+    if (!equipped || !mounted) return;
+
+    if (playWinChime) {
+      AudioService().playWin();
+      AudioService().hapticCelebration();
+    } else {
+      AudioService().playHit();
+    }
+
+    setState(() {
+      _selectedTheme = item.theme;
+    });
+
+    _showClubSnackbar(
+      customToast ?? '${item.name} activated for play!',
+      icon: playWinChime
+          ? Icons.workspace_premium_rounded
+          : Icons.check_circle_rounded,
+    );
+  }
+
+  Future<void> _handleRewardedThemeTap(ThemeCatalogItem item) async {
+    if (_loadingRewardedTheme != null || _isSwitchingTheme) return;
+    AudioService().hapticSelection();
+
+    bool newlyUnlocked = false;
+    await AdManager().showRewardedAd(
+      loadTimeout: const Duration(seconds: 5),
+      canPresent: () => mounted,
+      onLoadingStart: () {
+        if (mounted) {
+          setState(() => _loadingRewardedTheme = item.theme);
+        }
+      },
+      onLoadingEnd: () {
+        if (mounted) {
+          setState(() => _loadingRewardedTheme = null);
+        }
+      },
+      onUserEarnedReward: () async {
+        newlyUnlocked = await ThemeService().recordRewardedAdWatch(item.theme);
+      },
+      onAdDismissed: (bool rewardEarned) async {
+        if (!mounted) return;
+        if (!rewardEarned) {
+          setState(() {});
+          return;
+        }
+
+        if (newlyUnlocked || ThemeService().isThemeUnlocked(item.theme)) {
+          // Automatically unlock & apply theme without triggering a back-to-back Interstitial Ad.
+          await _equipUnlockedTheme(
+            item,
+            customToast: '${item.name} Unlocked!',
+            playWinChime: true,
+          );
+        } else {
+          final int watched = ThemeService().getWatchedRewardedAds(item.theme);
+          AudioService().playHit();
+          setState(() {});
+          _showClubSnackbar(
+            'Reward earned! ${item.name}: $watched/${item.requiredAds} ads watched',
+            icon: Icons.play_circle_filled_rounded,
+          );
+        }
+      },
+      onAdUnavailable: () {
+        _showClubSnackbar(
+          'Ad not available right now. Please check your internet and try again.',
+          icon: Icons.wifi_off_rounded,
+          isWarning: true,
+        );
+      },
+    );
+  }
+
+  void _selectTheme(ThemeCatalogItem item) {
+    if (_loadingRewardedTheme != null || _isSwitchingTheme) return;
+
+    if (!item.isUnlocked) {
+      if (item.isRewarded) {
+        _handleRewardedThemeTap(item);
+        return;
+      }
+      AudioService().hapticSelection();
+      _showPurchaseUnavailableDialog(item);
+      return;
+    }
+
+    if (item.isSelected) {
+      return;
+    }
+
+    AudioService().hapticSelection();
+    _isSwitchingTheme = true;
+    AdManager().showInterstitial(
+      onComplete: () async {
+        _isSwitchingTheme = false;
+        if (!mounted) return;
+        await _equipUnlockedTheme(item);
+      },
     );
   }
 
@@ -296,6 +407,7 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
   Widget build(BuildContext context) {
     final List<ThemeCatalogItem> items = ThemeService().getCatalogItems();
     final freeItems = items.where((i) => i.isFree).toList();
+    final rewardedItems = items.where((i) => i.isRewarded).toList();
     final premiumItems = items.where((i) => i.isPremium).toList();
 
     return Scaffold(
@@ -362,10 +474,17 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Starter Themes Section
-                          _buildSectionHeader('STARTER THEMES (FREE)'),
+                          // Starter Free Theme Section
+                          _buildSectionHeader('STARTER THEME (FREE)'),
                           const SizedBox(height: 8),
                           ...freeItems.map(_buildThemeCard),
+
+                          const SizedBox(height: 16),
+
+                          // Rewarded-Ad Unlockable Themes Section
+                          _buildSectionHeader('REWARDED CLUB THEMES (WATCH ADS)'),
+                          const SizedBox(height: 8),
+                          ...rewardedItems.map(_buildThemeCard),
 
                           const SizedBox(height: 16),
 
@@ -485,6 +604,21 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
   Widget _buildThemeCard(ThemeCatalogItem item) {
     final bool isSelected = item.isSelected;
     final bool isUnlocked = item.isUnlocked;
+    final bool isLockedRewarded = item.isRewarded && !isUnlocked;
+    final bool isLoadingThis = _loadingRewardedTheme == item.theme;
+
+    final String subtitleText;
+    if (isLockedRewarded) {
+      subtitleText = isLoadingThis
+          ? 'Loading rewarded ad...'
+          : 'Watch ${item.requiredAds} Ads to Unlock • ${item.watchedAds}/${item.requiredAds}';
+    } else if (item.isRewarded && isUnlocked) {
+      subtitleText = isSelected ? 'Unlocked • Selected' : 'Unlocked • Club Edition';
+    } else if (item.isFree) {
+      subtitleText = 'Starter Table • Free Unlock';
+    } else {
+      subtitleText = 'Championship Club Edition';
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -501,7 +635,9 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
             border: Border.all(
               color: isSelected
                   ? const Color(0xFF0F5A3E)
-                  : const Color(0xFFE8D5B0),
+                  : (isLockedRewarded
+                      ? const Color(0xFFD9B86A)
+                      : const Color(0xFFE8D5B0)),
               width: isSelected ? 1.8 : 1.1,
             ),
             boxShadow: [
@@ -529,7 +665,7 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: isSelected
+                      color: isSelected || isLockedRewarded
                           ? const Color(0xFFD6B24E)
                           : const Color(0xFFE2D6C3),
                       width: 1.0,
@@ -552,7 +688,7 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
 
                 const SizedBox(width: 14),
 
-                // 2. Theme Name & Metadata
+                // 2. Theme Name, Metadata & Rewarded Progress Bar
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,30 +703,40 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
                           fontWeight: FontWeight.w800,
                           color: isUnlocked
                               ? const Color(0xFF14243B)
-                              : const Color(0xFF5A5245),
+                              : const Color(0xFF3E3529),
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        item.isFree
-                            ? 'Starter Table • Free Unlock'
-                            : 'Championship Club Edition',
+                        subtitleText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.outfit(
                           fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF7A6E5D),
+                          fontWeight:
+                              isLockedRewarded ? FontWeight.w600 : FontWeight.w500,
+                          color: isLockedRewarded
+                              ? const Color(0xFF8B6415)
+                              : const Color(0xFF7A6E5D),
                         ),
                       ),
+                      if (isLockedRewarded) ...[
+                        const SizedBox(height: 6),
+                        _buildRewardProgressBar(item.rewardProgress),
+                      ],
                     ],
                   ),
                 ),
 
                 const SizedBox(width: 10),
 
-                // 3. Status Badge / Action Indicator
-                _buildStatusIndicator(item, isSelected, isUnlocked),
+                // 3. Status Badge / Interactive Watch Ad Pill
+                _buildStatusIndicator(
+                  item,
+                  isSelected,
+                  isUnlocked,
+                  isLoadingThis: isLoadingThis,
+                ),
               ],
             ),
           ),
@@ -599,11 +745,54 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
     );
   }
 
+  Widget _buildRewardProgressBar(double progress) {
+    return Container(
+      height: 6,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0E6D2),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFFE0CCA4),
+          width: 0.6,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(999),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double fillWidth =
+                (constraints.maxWidth * progress.clamp(0.0, 1.0));
+            return Stack(
+              children: [
+                if (fillWidth > 0)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    width: fillWidth,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Color(0xFF146C49),
+                          Color(0xFFD6B24E),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatusIndicator(
     ThemeCatalogItem item,
     bool isSelected,
-    bool isUnlocked,
-  ) {
+    bool isUnlocked, {
+    bool isLoadingThis = false,
+  }) {
     if (isSelected) {
       // Emerald Green ACTIVE badge with golden checkmark
       return Container(
@@ -647,6 +836,61 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
             ),
           ],
         ),
+      );
+    }
+
+    if (!isUnlocked && item.isRewarded) {
+      // Interactive Gold/Emerald WATCH AD pill button
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF146C49), Color(0xFF0C4D34)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFD6B24E),
+            width: 1.1,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x280C4D34),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: isLoadingThis
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.0,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFDF7A)),
+                ),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.play_circle_filled_rounded,
+                    size: 14,
+                    color: Color(0xFFFFDF7A),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${item.watchedAds}/${item.requiredAds}',
+                    style: GoogleFonts.outfit(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
       );
     }
 
@@ -709,7 +953,7 @@ class _ThemeCollectionScreenState extends State<ThemeCollectionScreen> {
       );
     }
 
-    // Unlocked Premium Theme -> SELECT affordance
+    // Unlocked Rewarded or Premium Theme -> SELECT affordance
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
       decoration: BoxDecoration(

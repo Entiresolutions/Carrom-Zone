@@ -14,6 +14,13 @@ class AudioService with WidgetsBindingObserver {
   static const String sfxTouchAsset = 'audio/touch_effect.mp3';
   static const String sfxCollisionAsset = 'audio/pieces_touch.mp3';
   static const String sfxPocketAsset = 'audio/port.mp3';
+  static const String sfxWinAsset = 'audio/win.wav';
+
+  // Cached Source instances to eliminate runtime object recreation
+  static final Source _collisionSource = AssetSource(sfxCollisionAsset);
+  static final Source _pocketSource = AssetSource(sfxPocketAsset);
+  static final Source _touchSource = AssetSource(sfxTouchAsset);
+  static final Source _winSource = AssetSource(sfxWinAsset);
 
   // Independent toggles
   bool sfxEnabled = true;
@@ -27,7 +34,10 @@ class AudioService with WidgetsBindingObserver {
     if (!val) {
       pauseBgm();
     } else {
-      if (_isAppForeground && !_isGameplayPaused && !_isGameplayActive) {
+      if (_isAppForeground &&
+          !_isAdAudioPaused &&
+          !_isGameplayPaused &&
+          !_isGameplayActive) {
         resumeBgm();
       }
     }
@@ -42,6 +52,8 @@ class AudioService with WidgetsBindingObserver {
     AudioPlayer(),
     AudioPlayer(),
     AudioPlayer(),
+    AudioPlayer(),
+    AudioPlayer(),
   ];
   int _hitPoolIndex = 0;
 
@@ -49,11 +61,13 @@ class AudioService with WidgetsBindingObserver {
   final List<AudioPlayer> _pocketPool = [
     AudioPlayer(),
     AudioPlayer(),
+    AudioPlayer(),
   ];
   int _pocketPoolIndex = 0;
 
   // Pool of audio players for UI touch / button interactions
   final List<AudioPlayer> _uiTouchPool = [
+    AudioPlayer(),
     AudioPlayer(),
     AudioPlayer(),
   ];
@@ -69,21 +83,40 @@ class AudioService with WidgetsBindingObserver {
   bool _isGameplayActive = false;
   bool _isGameplayPaused = false;
   bool _isAppForeground = true;
+  bool _isAdAudioPaused = false;
   bool _isObserverRegistered = false;
 
   bool get isBgmPlaying => _isBgmPlaying;
   bool get isGameplayActive => _isGameplayActive;
   bool get isGameplayPaused => _isGameplayPaused;
   bool get isAppForeground => _isAppForeground;
+  bool get isAdAudioPaused => _isAdAudioPaused;
+
+  // Testing hooks
+  @visibleForTesting
+  int get hitPoolSize => _hitPool.length;
+  @visibleForTesting
+  int get pocketPoolSize => _pocketPool.length;
+  @visibleForTesting
+  int get uiTouchPoolSize => _uiTouchPool.length;
+  @visibleForTesting
+  int get lastHitTime => _lastHitTime;
+  @visibleForTesting
+  int get lastPocketTime => _lastPocketTime;
 
   // Sound rate limiting to prevent distortion during rapid cluster collisions or duplicate triggers
   int _lastHitTime = 0;
   int _lastPocketTime = 0;
   int _lastUiTouchTime = 0;
 
-  static const int _minHitIntervalMs = 50;
-  static const int _minPocketIntervalMs = 50;
-  static const int _minUiTouchIntervalMs = 60;
+  // Calibrated debounce thresholds:
+  // 20ms hit interval allows distinct collisions across consecutive frames (~16-33ms)
+  // while safely preventing duplicate intra-substep impulse triggers.
+  static const int _minHitIntervalMs = 20;
+  // 20ms pocket interval allows distinct multi-piece drops while preventing duplicate events.
+  static const int _minPocketIntervalMs = 20;
+  // 50ms UI touch interval provides crisp tactile feel without runaway clicks.
+  static const int _minUiTouchIntervalMs = 50;
 
   void _registerLifecycleObserver() {
     if (_isObserverRegistered) return;
@@ -101,28 +134,38 @@ class AudioService with WidgetsBindingObserver {
       // 1. Piece collision pool (pieces_touch.mp3)
       for (final p in _hitPool) {
         await p.setPlayerMode(PlayerMode.lowLatency);
-        await p.setSource(AssetSource(sfxCollisionAsset));
+        await p.setSource(_collisionSource);
         await p.setVolume(0.85);
       }
 
       // 2. Pocket pool (port.mp3)
       for (final p in _pocketPool) {
         await p.setPlayerMode(PlayerMode.lowLatency);
-        await p.setSource(AssetSource(sfxPocketAsset));
+        await p.setSource(_pocketSource);
         await p.setVolume(0.95);
       }
 
       // 3. UI touch pool (touch_effect.mp3)
       for (final p in _uiTouchPool) {
         await p.setPlayerMode(PlayerMode.lowLatency);
-        await p.setSource(AssetSource(sfxTouchAsset));
+        await p.setSource(_touchSource);
         await p.setVolume(0.75);
       }
 
+      // 4. Dedicated gameplay audio players
+      await _shootPlayer.setPlayerMode(PlayerMode.lowLatency);
+      await _shootPlayer.setSource(_touchSource);
+      await _shootPlayer.setVolume(0.70);
+
       await _winPlayer.setPlayerMode(PlayerMode.lowLatency);
-      await _winPlayer.setSource(AssetSource('audio/win.wav'));
+      await _winPlayer.setSource(_winSource);
       await _winPlayer.setVolume(0.95);
 
+      await _foulPlayer.setPlayerMode(PlayerMode.lowLatency);
+      await _foulPlayer.setSource(_touchSource);
+      await _foulPlayer.setVolume(0.85);
+
+      // 5. Background music player
       await _bgmPlayer.setPlayerMode(PlayerMode.mediaPlayer);
       await _bgmPlayer.setReleaseMode(ReleaseMode.loop);
       await _bgmPlayer.setVolume(bgmDefaultVolume);
@@ -138,7 +181,10 @@ class AudioService with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _isAppForeground = true;
-      if (_musicEnabled && !_isGameplayPaused && !_isGameplayActive) {
+      if (_musicEnabled &&
+          !_isAdAudioPaused &&
+          !_isGameplayPaused &&
+          !_isGameplayActive) {
         resumeBgm();
       }
     } else if (state == AppLifecycleState.inactive ||
@@ -148,6 +194,27 @@ class AudioService with WidgetsBindingObserver {
       _isAppForeground = false;
       pauseBgm();
       stopAllSfx();
+    }
+  }
+
+  /// Pauses all music and stops active SFX while a full-screen ad is presenting.
+  void onAdOpened() {
+    if (_isAdAudioPaused) return;
+    _isAdAudioPaused = true;
+    pauseBgm();
+    stopAllSfx();
+  }
+
+  /// Restores audio eligibility once a full-screen ad closes, respecting
+  /// user mute settings, foreground state, and gameplay state.
+  void onAdClosed() {
+    if (!_isAdAudioPaused) return;
+    _isAdAudioPaused = false;
+    if (_musicEnabled &&
+        _isAppForeground &&
+        !_isGameplayPaused &&
+        !_isGameplayActive) {
+      resumeBgm();
     }
   }
 
@@ -161,7 +228,7 @@ class AudioService with WidgetsBindingObserver {
     } else {
       _isGameplayPaused = false;
       // Requirement: Resume BGM when returning to Home/Menu, without restarting the track.
-      if (_musicEnabled && _isAppForeground) {
+      if (_musicEnabled && _isAppForeground && !_isAdAudioPaused) {
         resumeBgm();
       }
     }
@@ -177,7 +244,7 @@ class AudioService with WidgetsBindingObserver {
     if (paused) {
       pauseBgm();
     } else {
-      if (_musicEnabled && _isAppForeground) {
+      if (_musicEnabled && _isAppForeground && !_isAdAudioPaused) {
         resumeBgm();
       }
     }
@@ -185,7 +252,11 @@ class AudioService with WidgetsBindingObserver {
 
   // --- Background Music (BGM) ---
   Future<void> playBgm() async {
-    if (!_musicEnabled || !_isAppForeground || _isGameplayActive || _isGameplayPaused) {
+    if (!_musicEnabled ||
+        !_isAppForeground ||
+        _isAdAudioPaused ||
+        _isGameplayActive ||
+        _isGameplayPaused) {
       return;
     }
     if (_isBgmPlaying && _bgmPlayer.state == PlayerState.playing) {
@@ -219,7 +290,11 @@ class AudioService with WidgetsBindingObserver {
   }
 
   Future<void> resumeBgm() async {
-    if (!_musicEnabled || !_isAppForeground || _isGameplayActive || _isGameplayPaused) {
+    if (!_musicEnabled ||
+        !_isAppForeground ||
+        _isAdAudioPaused ||
+        _isGameplayActive ||
+        _isGameplayPaused) {
       return;
     }
     if (_isBgmPlaying && _bgmPlayer.state == PlayerState.playing) {
@@ -249,8 +324,30 @@ class AudioService with WidgetsBindingObserver {
   }
 
   // --- Overlapping SFX with Rate Limiting & Physics Scaling ---
+
+  /// Safely plays an asset on a given [AudioPlayer] instance.
+  /// Stops previous playback if active to reset stream position cleanly
+  /// without relying on unsupported seek operations in low-latency mode.
+  Future<void> _playPoolSlot(
+    AudioPlayer player,
+    Source source, {
+    required double volume,
+  }) async {
+    try {
+      if (player.state == PlayerState.playing) {
+        await player.stop();
+      }
+      await player.setVolume(volume);
+      await player.play(source, volume: volume);
+    } catch (_) {
+      try {
+        await player.play(source, volume: volume);
+      } catch (_) {}
+    }
+  }
+
   void playUiTouch() {
-    if (!sfxEnabled || !_isAppForeground) return;
+    if (!sfxEnabled || !_isAppForeground || _isAdAudioPaused) return;
     final int now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastUiTouchTime < _minUiTouchIntervalMs) return;
     _lastUiTouchTime = now;
@@ -258,23 +355,21 @@ class AudioService with WidgetsBindingObserver {
     try {
       final player = _uiTouchPool[_uiTouchPoolIndex];
       _uiTouchPoolIndex = (_uiTouchPoolIndex + 1) % _uiTouchPool.length;
-      player.seek(Duration.zero);
-      player.resume();
+      _playPoolSlot(player, _touchSource, volume: 0.75);
     } catch (_) {}
   }
 
   void playHit({double volumeScale = 1.0}) {
-    if (!sfxEnabled || !_isAppForeground) return;
+    if (!sfxEnabled || !_isAppForeground || _isAdAudioPaused) return;
     final int now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastHitTime < _minHitIntervalMs) return;
     _lastHitTime = now;
 
     try {
+      final double effectiveVol = (0.90 * volumeScale).clamp(0.25, 1.0);
       final player = _hitPool[_hitPoolIndex];
       _hitPoolIndex = (_hitPoolIndex + 1) % _hitPool.length;
-      player.setVolume((0.85 * volumeScale).clamp(0.15, 1.0));
-      player.seek(Duration.zero);
-      player.resume();
+      _playPoolSlot(player, _collisionSource, volume: effectiveVol);
     } catch (_) {}
   }
 
@@ -287,7 +382,7 @@ class AudioService with WidgetsBindingObserver {
   }
 
   void playPocket() {
-    if (!sfxEnabled || !_isAppForeground) return;
+    if (!sfxEnabled || !_isAppForeground || _isAdAudioPaused) return;
     final int now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastPocketTime < _minPocketIntervalMs) return;
     _lastPocketTime = now;
@@ -295,8 +390,7 @@ class AudioService with WidgetsBindingObserver {
     try {
       final player = _pocketPool[_pocketPoolIndex];
       _pocketPoolIndex = (_pocketPoolIndex + 1) % _pocketPool.length;
-      player.seek(Duration.zero);
-      player.resume();
+      _playPoolSlot(player, _pocketSource, volume: 0.95);
     } catch (_) {}
   }
 
@@ -306,42 +400,29 @@ class AudioService with WidgetsBindingObserver {
   }
 
   void playQueenCover() {
-    if (!sfxEnabled || !_isAppForeground) return;
-    try {
-      _winPlayer.seek(Duration.zero);
-      _winPlayer.setVolume(0.9);
-      _winPlayer.resume();
-    } catch (_) {}
+    if (!sfxEnabled || !_isAppForeground || _isAdAudioPaused) return;
+    _playPoolSlot(_winPlayer, _winSource, volume: 0.95);
     hapticCelebration();
   }
 
   void playFoul() {
-    if (!sfxEnabled || !_isAppForeground) return;
-    try {
-      _foulPlayer.seek(Duration.zero);
-      _foulPlayer.resume();
-    } catch (_) {}
+    if (!sfxEnabled || !_isAppForeground || _isAdAudioPaused) return;
+    _playPoolSlot(_foulPlayer, _touchSource, volume: 0.85);
     hapticFoul();
   }
 
   void playShoot() {
-    if (!sfxEnabled || !_isAppForeground) return;
-    try {
-      _shootPlayer.seek(Duration.zero);
-      _shootPlayer.resume();
-    } catch (_) {}
+    if (!sfxEnabled || !_isAppForeground || _isAdAudioPaused) return;
+    _playPoolSlot(_shootPlayer, _touchSource, volume: 0.70);
   }
 
   void playWin() {
-    if (!sfxEnabled || !_isAppForeground) return;
-    try {
-      _winPlayer.seek(Duration.zero);
-      _winPlayer.resume();
-    } catch (_) {}
+    if (!sfxEnabled || !_isAppForeground || _isAdAudioPaused) return;
+    _playPoolSlot(_winPlayer, _winSource, volume: 0.95);
   }
 
   void playDefeat() {
-    if (!sfxEnabled || !_isAppForeground) return;
+    if (!sfxEnabled || !_isAppForeground || _isAdAudioPaused) return;
     hapticHeavy();
   }
 

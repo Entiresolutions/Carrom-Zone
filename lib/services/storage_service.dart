@@ -18,6 +18,27 @@ class StorageService {
   static const String _keyPurchasedThemes = 'carrom_purchased_themes_v1';
   static const String _keyDevMockUnlockedThemes = 'carrom_dev_mock_unlocked_themes_v1';
 
+  static String? _rewardedThemeSlug(BoardThemeType theme) {
+    switch (theme) {
+      case BoardThemeType.emerald:
+        return 'heritage_club_teal';
+      case BoardThemeType.midnight:
+        return 'royal_navy_lounge';
+      default:
+        return null;
+    }
+  }
+
+  static String? rewardedProgressKeyFor(BoardThemeType theme) {
+    final slug = _rewardedThemeSlug(theme);
+    return slug == null ? null : 'theme_ad_progress_$slug';
+  }
+
+  static String? rewardedUnlockedKeyFor(BoardThemeType theme) {
+    final slug = _rewardedThemeSlug(theme);
+    return slug == null ? null : 'theme_unlocked_$slug';
+  }
+
   SharedPreferences? _prefs;
 
   Future<void> init({bool forceReload = false}) async {
@@ -130,5 +151,33 @@ class StorageService {
 
   Future<void> setDevMockUnlockedThemes(List<String> themes) async {
     await _prefs?.setStringList(_keyDevMockUnlockedThemes, themes);
+  }
+
+  // --- Rewarded Ad Theme Unlock Progress & Entitlements ---
+  int getThemeAdProgress(BoardThemeType theme) {
+    final key = rewardedProgressKeyFor(theme);
+    if (key == null) return 0;
+    return _prefs?.getInt(key) ?? 0;
+  }
+
+  Future<void> setThemeAdProgress(BoardThemeType theme, int count) async {
+    final key = rewardedProgressKeyFor(theme);
+    if (key == null) return;
+    await _prefs?.setInt(key, count < 0 ? 0 : count);
+  }
+
+  bool isRewardedThemeUnlocked(BoardThemeType theme) {
+    final key = rewardedUnlockedKeyFor(theme);
+    if (key == null) return false;
+    return _prefs?.getBool(key) ?? false;
+  }
+
+  Future<void> setRewardedThemeUnlocked(
+    BoardThemeType theme,
+    bool unlocked,
+  ) async {
+    final key = rewardedUnlockedKeyFor(theme);
+    if (key == null) return;
+    await _prefs?.setBool(key, unlocked);
   }
 }

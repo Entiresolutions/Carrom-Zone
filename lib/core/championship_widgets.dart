@@ -158,12 +158,14 @@ class _TwoPeopleIconPainter extends CustomPainter {
 class ChampionshipThemeCard extends StatelessWidget {
   final BoardThemeType theme;
   final bool isPremium;
+  final String? tierBadgeText;
   final VoidCallback onTap;
 
   const ChampionshipThemeCard({
     super.key,
     required this.theme,
     required this.isPremium,
+    this.tierBadgeText,
     required this.onTap,
   });
 
@@ -252,7 +254,7 @@ class ChampionshipThemeCard extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          isPremium ? 'PREMIUM' : 'FREE',
+                          tierBadgeText ?? (isPremium ? 'PREMIUM' : 'FREE'),
                           style: ChampionshipTypography.microBadge(
                             color: isPremium
                                 ? ChampionshipColors.gold

@@ -37,10 +37,24 @@ class GameConfig {
   // Baselines (in virtual coordinates, center is 0,0)
   static const double baselineYWhite = 142.0;
   static const double baselineYBlack = -142.0;
-  static const double baselineHalfWidth = 85.0;
-  static const double baselineStrikerInset = 18.0;
-  static const double strikerMinX = -baselineHalfWidth + baselineStrikerInset; // -67.0
-  static const double strikerMaxX = baselineHalfWidth - baselineStrikerInset;  // 67.0
+  static const double baselineHalfWidth = 85.0; // Distance to red circle centers
+  static const double baselineStrikerInset = 0.0; // Striker can reach and cover the red circles
+  static const double strikerMinX = -baselineHalfWidth; // -85.0 (up to on top of left red circle)
+  static const double strikerMaxX = baselineHalfWidth;  // 85.0 (up to on top of right red circle)
+
+  /// Validates that a striker position is within legal board boundaries and does not overlap pockets.
+  static bool isStrikerPositionWithinBounds(Vector2 pos) {
+    if (pos.x < strikerMinX - 0.5 || pos.x > strikerMaxX + 0.5) return false;
+    // Cushion wall bounds check (striker body must stay strictly inside playing field)
+    const double halfPlay = halfBoard - 16.0; // 184.0
+    if (pos.x.abs() + strikerRadius > halfPlay) return false;
+    // Pocket clearance check (striker must never overlap any pocket hole or outer trim)
+    const double minPocketClearance = strikerRadius + pocketRadius + 6.5; // 41.5
+    for (final pocket in pockets) {
+      if (pos.distanceTo(pocket) < minPocketClearance) return false;
+    }
+    return true;
+  }
 
   // Corner Pocket positions (in virtual coordinates where center is 0,0)
   static const double pocketOffset = halfBoard - 22.0;

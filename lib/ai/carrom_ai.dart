@@ -1120,7 +1120,7 @@ class CarromAI {
     final double maxX = GameConfig.strikerMaxX;
 
     // Dynamically sample baseline positions across the authoritative legal slider span
-    const int sampleCount = 11;
+    const int sampleCount = 13;
     final double step = (maxX - minX) / (sampleCount - 1);
     final List<double> candidates = [
       for (int i = 0; i < sampleCount; i++) minX + (i * step),

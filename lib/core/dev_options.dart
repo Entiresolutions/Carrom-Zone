@@ -155,7 +155,7 @@ class _DevThemeTesterSheetState extends State<DevThemeTesterSheet> {
   Future<void> _setThemeDirectly(BoardThemeType theme) async {
     AudioService().hapticSelection();
     // Allow developer to equip and unlock for testing
-    if (ThemeService().isThemePremium(theme)) {
+    if (!ThemeService().isThemeFree(theme)) {
       await ThemeService().devUnlockTheme(theme);
     }
     await StorageService().setBoardTheme(theme);
