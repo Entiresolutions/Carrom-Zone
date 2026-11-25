@@ -25,10 +25,12 @@ void main() {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Initialize AdMob SDK & preload ads asynchronously without blocking first frame
-  unawaited(AdManager().initialize());
-
   runApp(const CarromMasterApp());
+
+  // Initialize AdMob SDK & preload ads only after the first frame & Activity attach
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(AdManager().initialize());
+  });
 }
 
 class CarromMasterApp extends StatelessWidget {

@@ -19,8 +19,13 @@
         android:label="Carrom Zone"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="true"
         android:hardwareAccelerated="true">
+        <!-- Google AdMob App ID (Production) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3794659976212193~5768827141" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

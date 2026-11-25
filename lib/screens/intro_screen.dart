@@ -37,16 +37,19 @@ class _IntroScreenState extends State<IntroScreen> {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     } catch (_) {}
 
+    // Watchdog timeout ensures slow/broken device decoders never hang startup
+    _fallbackTimer = Timer(const Duration(seconds: 6), _proceedToSplash);
+
     try {
       final controller = VideoPlayerController.asset('assets/intro_portrait.mp4');
       _controller = controller;
 
-      await controller.initialize();
+      await controller.initialize().timeout(const Duration(seconds: 4));
       // Permanently muted
       await controller.setVolume(0.0);
       await controller.setLooping(false);
 
-      if (!mounted) return;
+      if (!mounted || _hasNavigated) return;
 
       controller.addListener(_videoListener);
       await controller.play();
@@ -58,6 +61,7 @@ class _IntroScreenState extends State<IntroScreen> {
       // Safety fallback timer if playback completes without trigger
       final totalDuration = controller.value.duration;
       if (totalDuration > Duration.zero) {
+        _fallbackTimer?.cancel();
         _fallbackTimer = Timer(totalDuration + const Duration(milliseconds: 300), () {
           _proceedToSplash();
         });
@@ -70,7 +74,12 @@ class _IntroScreenState extends State<IntroScreen> {
 
   void _videoListener() {
     final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
+    if (controller == null) return;
+    if (controller.value.hasError) {
+      _proceedToSplash();
+      return;
+    }
+    if (!controller.value.isInitialized) return;
 
     final position = controller.value.position;
     final duration = controller.value.duration;
